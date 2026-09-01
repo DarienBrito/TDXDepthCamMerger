@@ -11,9 +11,12 @@ The clouds are generated procedurally inside a script TOP callback instead of
 being stored on the operator. Storing three 256x192 RGBA float arrays would add
 roughly 2 MB of pickled numpy to the .toe; generating them costs one cook.
 
-This script leaves Pythonexe empty on purpose: it is machine specific and the
-README tells the user to set it. Verify with your own interpreter, then clear it
-before saving the demo.
+Pythonexe arrives empty because td_build.py clears it in the exported .tox. Set
+it if you want to drive a calibration here, then re-run this script to get a
+clean demo back before saving.
+
+Saving is a separate script, tools/save_demo.py, because the demo must not ship
+the TDMCP tox and destroying TDMCP kills the connection this one arrived on.
 """
 
 import os
@@ -194,13 +197,13 @@ brings them into a single coordinate space.
 
 To run it:
 
-  1. Select TDXDepthCamMerger. On the Configuration page set Python exe to a
+  1. Select TDXDepthCamMerger. On the Setup page set Python exe to a
      python.exe that has open3d installed, then pulse Check worker. Worker
      status should report the versions. See the README for the install.
 
   2. Pulse Gather devices. Three devices appear, one per customSources row.
 
-  3. Calibration page: set Specify pair to 1 and 2, then pulse Calibrate.
+  3. Calibrate page: set Specify pair to 1 and 2, then pulse Calibrate.
      Watch the green cloud swing onto the red one.
 
   4. Set Specify pair to 2 and 3 and pulse Calibrate again. Blue joins them,

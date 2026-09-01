@@ -13,7 +13,6 @@ container COMP's own saved state crashes TD 2025.33070 when it cooks. Its 145
 children are all fine, so we make a new container and copyOPs them in.
 """
 
-import json
 import os
 
 # Anchored on the open project rather than a machine path. This file is run with
@@ -36,6 +35,9 @@ NAME = 'TDXDepthCamMerger'
 SHORTCUT = 'TDXMerger'
 OLD_SHORTCUT = 'TDAzureMerger'
 PYEXE = os.environ.get('TDX_PYTHON_EXE') or 'D:/anaconda3/envs/td/python.exe'
+
+VERSION = '0.2.0'
+AUTHOR = 'Darien Brito'
 
 report = []
 
@@ -111,62 +113,97 @@ for t in touched:
 
 
 # ____________________________________________________ 4. custom parameters
+#
+# Declared here rather than replayed from the old custom_pars.json dump, which
+# is deleted: it shipped the original machine's Kinect serials as the defaults of
+# Devices and Ids, carried seven parameters 0.2.0 no longer has, and split one
+# page of state across a json file and forty lines of appends. Every runtime
+# parameter now starts empty and is filled by the extensions.
+#
+# Each row is (name, label, kind, options).
+#   section  draws a divider above the parameter
+#   readOnly is display only, script still writes it
+# Reading order per page: what you set, then what you press, then what comes back.
 
-with open(BUILD + '/custom_pars.json', encoding='utf-8') as h:
-	saved = json.load(h)
+PAGES = (
+	('Setup', (
+		('Inputsop', 'Inputs op', 'OP', {}),
+		('Devicetype', 'Device type', 'Menu', {
+			'menuNames': ('kinectazure', 'orbbec', 'custom'),
+			'menuLabels': ('Kinect Azure', 'Orbbec', 'Custom TOPs')}),
+		('Gatherdevices', 'Gather devices', 'Pulse', {}),
+		('Numberofdevices', 'Number of devices', 'Int', {'readOnly': True}),
+		('Devices', 'Devices', 'Str', {'readOnly': True}),
+		('Pythonexe', 'Python exe', 'File', {'val': PYEXE, 'section': True}),
+		('Checkworker', 'Check worker', 'Pulse', {}),
+		('Open3dstatus', 'Worker status', 'Str', {'readOnly': True}),
+	)),
+	('Calibrate', (
+		('Referencedevice', 'Reference device', 'Int', {'val': 1}),
+		('Specifypair', 'Specify pair', 'Int', {'size': 2, 'val': (1, 2)}),
+		('Ids', 'IDs', 'Str', {'readOnly': True}),
+		('Calibrate', 'Calibrate', 'Pulse', {'section': True}),
+		('Refine', 'Refine', 'Pulse', {}),
+		('Rebuildchain', 'Rebuild chain', 'Pulse', {}),
+		('Resetcalibration', 'Reset calibration', 'Pulse', {}),
+		('Laststatus', 'Last status', 'Str', {'readOnly': True, 'section': True}),
+		('Lastfitness', 'Last fitness', 'Str', {'readOnly': True}),
+		('Lastrmse', 'Last RMSE', 'Str', {'readOnly': True}),
+		('Lastcorrespondences', 'Last correspondences', 'Int', {'readOnly': True}),
+	)),
+	('Registration', (
+		# Chained is the default: calibrating from scratch wants both stages, and
+		# doing them in one worker run costs one process start instead of two.
+		('Mode', 'Mode', 'Menu', {
+			'val': 'globalThenIcp',
+			'menuNames': ('globalThenIcp', 'globalRegistration', 'table'),
+			'menuLabels': ('Global + ICP refine', 'Global registration only',
+				'From table DAT')}),
+		('Presetmatrixdat', 'Preset matrix DAT', 'DAT', {}),
+		('Voxelsize', 'Voxel size (m)', 'Float', {'val': 0.05, 'section': True}),
+		('Refinevoxel', 'Refine voxel (m)', 'Float', {'val': 0.01}),
+		('Maxrange', 'Max range (m)', 'Float', {'val': 0.0}),
+		('Usecoloricp', 'Use coloured ICP', 'Toggle', {'section': True}),
+		('Usemaskforcalibration', 'Use mask for calibration', 'Toggle', {}),
+		('Seed', 'RANSAC seed', 'Int', {'val': -1}),
+	)),
+	('About', (
+		('Readme', 'Readme', 'Pulse', {}),
+		('Support', 'Support', 'Pulse', {}),
+		('Website', 'Website', 'Pulse', {}),
+		('Author', 'Author', 'Str', {'val': AUTHOR, 'readOnly': True,
+			'section': True}),
+		('Version', 'Version', 'Str', {'val': VERSION, 'readOnly': True}),
+		('Open3dversion', 'Open3D version', 'Str', {'readOnly': True}),
+		('Pythonversion', 'Python version', 'Str', {'readOnly': True}),
+	)),
+)
 
-DROP = {'Asintermediary', 'Currentpair', 'Numberofpairs',
-	'Specifypairx', 'Specifypairy', 'Useplayerforcalibration', 'Gatherkinects'}
-APPEND = {'OP': 'appendOP', 'Pulse': 'appendPulse', 'Int': 'appendInt',
-	'Str': 'appendStr', 'Toggle': 'appendToggle', 'Menu': 'appendMenu'}
+APPEND = {'DAT': 'appendDAT', 'File': 'appendFile', 'Float': 'appendFloat',
+	'Int': 'appendInt', 'Menu': 'appendMenu', 'OP': 'appendOP',
+	'Pulse': 'appendPulse', 'Str': 'appendStr', 'Toggle': 'appendToggle'}
 
-pages = {n: comp.appendCustomPage(n) for n in ('Configuration', 'Calibration', 'About')}
-
-for e in sorted([s for s in saved if s['name'] not in DROP], key=lambda x: x['order']):
-	page = pages[e['page']]
-	par = getattr(page, APPEND[e['style']])(e['name'], label=e['label'])[0]
-	if e['style'] == 'Menu':
-		par.menuNames, par.menuLabels = e['menuNames'], e['menuLabels']
-	if e['style'] not in ('Pulse', 'OP') and e.get('val') is not None:
-		par.val = e['val']
-	if e.get('readOnly'):
-		par.readOnly = True
-
-cfg, cal, abt = pages['Configuration'], pages['Calibration'], pages['About']
-
-cfg.appendMenu('Devicetype', label='Device type')[0]
-comp.par.Devicetype.menuNames = ['kinectazure', 'orbbec', 'custom']
-comp.par.Devicetype.menuLabels = ['Kinect Azure', 'Orbbec', 'Custom TOPs']
-cfg.appendPulse('Gatherdevices', label='Gather devices')
-cfg.appendFile('Pythonexe', label='Python exe')[0].val = PYEXE
-cfg.appendPulse('Checkworker', label='Check worker')
-cfg.appendStr('Open3dstatus', label='Worker status')[0].readOnly = True
-
-cal.appendInt('Referencedevice', label='Reference device')[0].val = 1
-cal.appendInt('Specifypair', label='Specify pair', size=2)
-comp.par.Specifypair1.val, comp.par.Specifypair2.val = 1, 2
-cal.appendToggle('Usemaskforcalibration', label='Use mask for calibration')
-cal.appendFloat('Voxelsize', label='Voxel size (m)')[0].val = 0.05
-cal.appendFloat('Refinevoxel', label='Refine voxel (m)')[0].val = 0.01
-cal.appendFloat('Maxrange', label='Max range (m)')[0].val = 0.0
-cal.appendToggle('Usecoloricp', label='Use coloured ICP')
-cal.appendInt('Seed', label='RANSAC seed')[0].val = -1
-cal.appendDAT('Presetmatrixdat', label='Preset matrix DAT')
-cal.appendPulse('Rebuildchain', label='Rebuild chain')
-cal.appendPulse('Resetcalibration', label='Reset calibration')
-for n, l in (('Lastfitness', 'Last fitness'), ('Lastrmse', 'Last RMSE'),
-		('Laststatus', 'Last status')):
-	cal.appendStr(n, label=l)[0].readOnly = True
-cal.appendInt('Lastcorrespondences', label='Last correspondences')[0].readOnly = True
-
-comp.par.Version = '0.2.0'
-comp.par.Mode.menuNames = ['globalThenIcp', 'globalRegistration', 'table']
-comp.par.Mode.menuLabels = ['Global + ICP refine', 'Global registration only',
-	'From table DAT']
-# Chained is the default: calibrating from scratch wants both stages, and doing
-# them in one worker run costs one process start instead of two.
-comp.par.Mode.val = 'globalThenIcp'
-note('custom parameters: {}'.format(len(comp.customPars)))
+for pagename, entries in PAGES:
+	page = comp.appendCustomPage(pagename)
+	for name, label, kind, opt in entries:
+		kw = {'label': label}
+		if opt.get('size'):
+			kw['size'] = opt['size']
+		group = getattr(page, APPEND[kind])(name, **kw)
+		if 'menuNames' in opt:
+			group[0].menuNames = list(opt['menuNames'])
+			group[0].menuLabels = list(opt['menuLabels'])
+		if 'val' in opt:
+			vals = opt['val'] if opt.get('size') else (opt['val'],)
+			for par, val in zip(group, vals):
+				par.val = val
+		if opt.get('readOnly'):
+			for par in group:
+				par.readOnly = True
+		if opt.get('section'):
+			group[0].startSection = True
+note('custom parameters: {} across {} pages'.format(
+	len(comp.customPars), len(PAGES)))
 
 
 # ____________________________________________________ 5. tables and DATs
@@ -223,7 +260,18 @@ installDat('workerSource', SRC + '/worker.py', -900, -40)
 note('installed extension, utilities and worker source from {}'.format(SRC))
 note('python exe: {}'.format(PYEXE))
 
-comp.op('parexec1').text = '''# Routes root parameter pulses to the extensions.
+comp.op('parexec1').text = '''# Routes every root parameter pulse: the work goes to the extensions, the three
+# About pulses go to the system browser. There is no webrender TOP in the
+# component, so opening a link starts no CEF process inside TouchDesigner.
+
+import webbrowser
+
+LINKS = {
+	'Readme': 'https://github.com/DarienBrito/TDAzureMerger',
+	'Support': 'https://www.patreon.com/c/darienbrito',
+	'Website': 'https://www.darienbrito.com',
+}
+
 
 def onValueChange(par, prev):
 	comp = parent()
@@ -252,6 +300,8 @@ def onPulse(par):
 		comp.ResetCalibration()
 	elif name == 'Checkworker':
 		comp.CheckWorker()
+	elif name in LINKS:
+		webbrowser.open(LINKS[name])
 	return
 '''
 comp.op('parexec1').par.ops = comp
@@ -359,28 +409,13 @@ comp.op('render1').par.lights = 'World/light1 World/ambient1'
 
 stripped = []
 
-# The Readme was a containerCOMP wrapping a webrenderTOP left active, so every
-# instance started a CEF browser process on load. actions/parexec1 already
-# opened Support in the real browser; the Readme now goes the same way.
-actions = comp.op('actions')
-if actions.op('Readme'):
-	actions.op('Readme').destroy()
-	stripped.append('actions/Readme')
-# 'Help' is a 0.0.3 leftover: the pattern matches no parameter on this component.
-actions.op('parexec1').par.pars = 'Readme Support'
-actions.op('parexec1').text = """import webbrowser
-
-README = 'https://github.com/DarienBrito/TDAzureMerger#readme'
-SUPPORT = 'https://darienbrito.com/support/'
-
-
-def onPulse(par):
-	if par.name == 'Readme':
-		webbrowser.open(README)
-	elif par.name == 'Support':
-		webbrowser.open(SUPPORT)
-	return
-"""
+# The whole 'actions' baseCOMP goes: it held a Readme containerCOMP wrapping a
+# webrenderTOP left active (a CEF process per instance, on load) and a second
+# parameterexecuteDAT that only called webbrowser.open. The root parexec1 above
+# already sees every root parameter, so it routes the About links too.
+if comp.op('actions'):
+	comp.op('actions').destroy()
+	stripped.append('actions (COMP, was a second parexec + a CEF Readme)')
 
 # The DeviceCam replicator counted rows in an opfindDAT that rescanned the
 # network every cook, to learn a number the component already knows.
@@ -402,6 +437,24 @@ for dead in ('opfind1', 'opfind1_callbacks', 'World/replicator1_callbacks'):
 if device.op('glsl2_info'):
 	device.op('glsl2_info').destroy()
 	stripped.append('Device1/glsl2_info')
+
+# 'mtx' was a null DAT passing transformMatrix straight through to the shader's
+# matrix uniform. The uniform takes the table directly. One operator per device.
+if device.op('mtx'):
+	device.op('glsl2').par.matrix0value = 'transformMatrix'
+	device.op('mtx').destroy()
+	stripped.append('Device1/mtx (null DAT, uniform now reads transformMatrix)')
+
+# UI/Viz reached the render through a selectTOP holding an ABSOLUTE path
+# (/ProjectName/TDXDepthCamMerger/bg), which breaks the moment the .tox is
+# dropped into a project with any other root name. A panel's Background TOP
+# parameter resolves an operator across networks, so it points at bg itself.
+viz = comp.op('UI/Viz')
+if viz and viz.op('select2'):
+	viz.par.top.val = viz.relativePath(comp.op('bg'))
+	for dead in ('bg', 'select2'):
+		viz.op(dead).destroy()
+	stripped.append('UI/Viz/select2 + UI/Viz/bg (absolute path removed)')
 
 # Active duplicates Show, which is what actually reaches the shader as uShow.
 # Parentdevice was written by createDevices and read by nothing; the real parent
@@ -426,12 +479,122 @@ for name, source, order, y in (
 note('added out_points and out_colors')
 
 
+# ____________________________________________________ 9. annotations
+
+# Comments are free: every operator carries one, readable in the network editor
+# and in the OP dialog. Boxes are not. TD 2025 has no lightweight networkBox any
+# more, and one annotateCOMP is 24 internal operators and ~1.9 KB of .tox, so
+# there are three of them, over the three regions the network is navigated by,
+# rather than one per cluster. Measured 2026-09-01: 132 ops / 27.0 KB bare,
+# 204 ops / 36.2 KB with the three boxes and the comments below.
+
+COMMENTS = {
+	'extTDXDepthCamMerger': 'Root extension: Calibrate, Refine, RebuildChain, '
+		'ResetCalibration, CheckWorker. Imports numpy, never open3d.',
+	'extUtilities': 'Device discovery, per device source TOPs, clone management.',
+	'workerSource': 'worker.py. Written to temp and run by the Setup python as a '
+		'subprocess. Importing open3d inside TouchDesigner crashes the process, '
+		'which is why all the Open3D work happens out there.',
+	'deviceTypes': 'Camera registry. One row per supported camera: what operator '
+		'to make, which image to select, what parameter holds the serial. A new '
+		'camera is a new row.',
+	'calibrationData': 'Source of truth. One row per device: its parent and its '
+		'RAW pairwise matrix, plus the quality of that fit.',
+	'customSources': 'Device type "custom" only: explicit TOP paths, one row per '
+		'device.',
+	'parexec1': 'Routes every root parameter. Pulses go to the extensions, the '
+		'three About links go to the system browser.',
+	'Device1': 'Clone master. Device2..N are clones made by the Gather devices '
+		'pulse. transformMatrix is cloneImmune, so each device keeps its own.',
+	'World': 'The merged cloud and one DeviceCam frustum per device. replicator1 '
+		'counts by Numberofdevices.',
+	'cam1': 'ArcBall viewport navigation.',
+	'UI': 'Viewport panel plus the parameter COMP.',
+	'render1': 'Viewport render.',
+	'bg': 'Viewport image. UI/Viz reads it through its Background TOP parameter.',
+	'out_points': 'Component output: merged point positions, straight out of World.',
+	'out_colors': 'Component output: merged colours, straight out of World.',
+}
+for name, text in COMMENTS.items():
+	if comp.op(name):
+		comp.op(name).comment = text
+
+DEVICE_COMMENTS = {
+	'in_pointcloud': 'Built from the deviceTypes row, not hardcoded.',
+	'in_color': 'Built from the deviceTypes row, not hardcoded.',
+	'in_mask': 'Built only when the camera has a mask source. Orbbec has none.',
+	'thresh1': 'Mask branch: player index to a 0/1 matte.',
+	'switch1': 'Raw cloud or masked cloud, per Usemaskforcalibration.',
+	'null_sourcePointcloud': 'What Calibrate samples and dumps to .npy.',
+	'glsl2': 'Applies the composed matrix on the GPU. w is forced to 1.0.',
+	'transformMatrix': 'This device COMPOSED into the reference frame. The only '
+		'table the shader and the frustum read.',
+	'null_pointCloud': 'What the renderer reads.',
+}
+for name, text in DEVICE_COMMENTS.items():
+	if device.op(name):
+		device.op(name).comment = text
+note('commented {} operators'.format(len(COMMENTS) + len(DEVICE_COMMENTS)))
+
+# Boxes are sized from the operators they hold, so moving a node cannot leave a
+# box behind. Padding leaves room for the title bar at the top.
+BOXES = (
+	('Code and state', ('extTDXDepthCamMerger', 'extUtilities', 'workerSource',
+		'deviceTypes', 'calibrationData', 'customSources'),
+		'The component in text. The three DATs on the left are installed from '
+		'src/ by tools/td_build.py; editing them in here is reverted by the next '
+		'build. The three tables are its state.'),
+	('Devices', ('Device1',),
+		'One COMP per camera, cloned from Device1: source TOPs, an optional mask '
+		'branch, and the GPU transform.'),
+	('Render and outputs', ('World', 'cam1', 'UI', 'render1', 'bg', 'out_points',
+		'out_colors'),
+		'The merged cloud, the viewport that shows it, and the two outTOPs that '
+		'hand it downstream. No Python runs per frame in here.'),
+)
+
+for old in comp.findChildren(type=annotateCOMP, maxDepth=1):
+	old.destroy()
+
+for title, members, body in BOXES:
+	ops = [comp.op(m) for m in members if comp.op(m)]
+	# 20 sideways keeps the Devices box clear of the Render box, which sits 65
+	# units to its right; 85 above leaves room for the title bar.
+	left = min(o.nodeX for o in ops) - 20
+	right = max(o.nodeX + o.nodeWidth for o in ops) + 20
+	bottom = min(o.nodeY for o in ops) - 30
+	top = max(o.nodeY + o.nodeHeight for o in ops) + 85
+	a = comp.create(annotateCOMP)
+	a.par.Mode = 'networkbox'
+	a.par.Titletext = title
+	a.par.Bodytext = body
+	a.par.Bodyfontsize = 14
+	a.par.Backcolorr, a.par.Backcolorg, a.par.Backcolorb = 0.11, 0.12, 0.15
+	a.par.Backcoloralpha = 0.6
+	a.nodeX, a.nodeY = left, bottom
+	a.nodeWidth, a.nodeHeight = right - left, top - bottom
+note('annotated {} regions'.format(len(BOXES)))
+
+
 comp.cook(force=True)
 errs = [(o.path.split(NAME + '/')[-1], o.errors().replace('\n', ' ')[:100])
 	for o in comp.findChildren(maxDepth=99) if o.errors()]
 note('errors after build: {}'.format(len(errs)))
 for p, e in errs:
 	note('    E {} -> {}'.format(p, e))
+
+
+# ____________________________________________________ 10. export the artefact
+
+# The shipped .tox must not carry this machine's interpreter path: a user opening
+# it would find a python.exe that does not exist on their disk, and the README
+# already walks them through setting their own. The master keeps PYEXE, because
+# tools/td_test_devicesources.py drives a real registration through it.
+keep = comp.par.Pythonexe.eval()
+comp.par.Pythonexe = ''
+comp.save(REPO + '/' + NAME + '.tox')
+comp.par.Pythonexe = keep
+note('exported {}/{}.tox, Pythonexe cleared in the artefact only'.format(REPO, NAME))
 
 print('\n'.join(report))
 print('\nBUILD DONE. Extensions bind on the next frame; verify then.')

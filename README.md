@@ -68,7 +68,7 @@ clouds come together. The START_HERE DAT in the project has the same steps.
    td-open3d\Scripts\pip install open3d numpy
    ```
 
-3. On the **Configuration** page, set **Python exe** to that interpreter's `python.exe`, then pulse
+3. On the **Setup** page, set **Python exe** to that interpreter's `python.exe`, then pulse
    **Check worker**. The **Worker status** field should come back with something like
    `OK: open3d 0.19.0 on python 3.11.13 (numpy 2.3.3)`. If it does not, nothing else will work, so
    fix this before going further.
@@ -78,15 +78,15 @@ fine, but that is the one I test.
 
 ## Using it
 
-1. **Configuration** page: pick your **Device type**, then pulse **Gather devices**. The component
+1. **Setup** page: pick your **Device type**, then pulse **Gather devices**. The component
    builds one `Device<n>` for each camera it finds and wires up its source TOPs.
 
-2. **Calibration** page: set **Specify pair** to the two cameras. The first field is the target,
+2. **Calibrate** page: set **Specify pair** to the two cameras. The first field is the target,
    which does not move; the second is the source, which gets transformed onto it. The **IDs**
    field shows which physical devices those numbers refer to.
 
-3. Pulse **Calibrate**. With the default **Mode** the component runs the global registration and
-   then seeds ICP with its result, in one pass.
+3. Pulse **Calibrate**. With the default **Mode** (on the **Registration** page) the component
+   runs the global registration and then seeds ICP with its result, in one pass.
 
 4. Repeat for each remaining pair, chaining outward from the reference camera. Calibrate 1 and 2,
    then 2 and 3, then 3 and 4. Every pairwise result is stored, and the component composes the
@@ -115,7 +115,7 @@ wrong answer into a convincing one.
 
 ## Parameters
 
-### Configuration
+### Setup
 
 | Parameter | What it does |
 |---|---|
@@ -126,25 +126,33 @@ wrong answer into a convincing one.
 | Check worker | Probe that interpreter and report its versions |
 | Worker status | Result of the probe |
 
-### Calibration
+### Calibrate
 
 | Parameter | Default | What it does |
 |---|---|---|
-| Specify pair | | Target and source device numbers. The target does not move |
+| Reference device | 1 | Whose frame everything ends up in |
+| Specify pair | 1, 2 | Target and source device numbers. The target does not move |
 | IDs | | Read-only, the physical devices behind those numbers |
-| Mode | Global + ICP refine | `Global + ICP refine` chains both stages in one worker run. `Global registration only` stops after RANSAC so you can inspect it. `From table DAT` takes a 4x4 you produced elsewhere |
 | Calibrate | | Run the current mode on the current pair |
 | Refine | | ICP on top of the existing calibration for that pair |
-| Reference device | 1 | Whose frame everything ends up in |
+| Rebuild chain | | Recompose all transforms without re-registering |
+| Reset calibration | | Forget everything, all devices back to identity |
+| Last status, fitness, RMSE, correspondences | | Read-only, how the last run went |
+
+### Registration
+
+The knobs behind a calibration run. The defaults are the ones I use.
+
+| Parameter | Default | What it does |
+|---|---|---|
+| Mode | Global + ICP refine | `Global + ICP refine` chains both stages in one worker run. `Global registration only` stops after RANSAC so you can inspect it. `From table DAT` takes a 4x4 you produced elsewhere |
+| Preset matrix DAT | | A 4x4 table DAT, used when Mode is `From table DAT` |
 | Voxel size (m) | 0.05 | Downsampling for the global stage. Bigger is faster and coarser |
 | Refine voxel (m) | 0.01 | Downsampling for ICP. 0 uses full resolution |
 | Max range (m) | 0 | Drop points beyond this distance. 0 keeps everything |
 | Use coloured ICP | off | Coloured ICP. Needs colour on both clouds and wants good overlap |
 | Use mask for calibration | off | Register only the masked region. See below |
 | RANSAC seed | -1 | Leave it at -1 and RANSAC uses every core, but the same scene can give a slightly different calibration each time. Set it to 0 or more and you get the same answer every run, at the cost of that parallel speedup: Open3D's RANSAC threads race, so reproducibility means running it on one thread |
-| Preset matrix DAT | | A 4x4 table DAT, used when Mode is `From table DAT` |
-| Rebuild chain | | Recompose all transforms without re-registering |
-| Reset calibration | | Forget everything, all devices back to identity |
 
 **Use mask for calibration** restricts registration to a masked part of the cloud, which helps when
 the cameras see a lot of static background. It only works where there is a mask to use. The Kinect
