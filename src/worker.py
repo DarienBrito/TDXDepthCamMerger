@@ -20,7 +20,9 @@ The job file is JSON:
       "voxel":        0.05,             metres, coarse/RANSAC resolution
       "refineVoxel":  0.01,             metres, ICP resolution (0 = full res)
       "maxRange":     0.0,              metres, 0 = no distance crop
-      "seed":         -1,               >=0 makes RANSAC reproducible
+      "seed":         -1,               >=0 pins OpenMP to 1 thread and seeds
+                                        Open3D, which makes RANSAC reproducible
+                                        at the cost of the parallel speedup
       "colored":      false,
       "init":         [16 floats]|null  row-major seed matrix for ICP
     }
@@ -193,6 +195,16 @@ def reply(matrix, metrics, targetPts, sourcePts):
 
 
 def run(job):
+	# Open3D parallelises RANSAC over OpenMP and the worker threads race, so
+	# utility.random.seed on its own does not reproduce a run: measured 4 distinct
+	# results in 6 identical jobs on 0.19.0. Pinning to one thread does reproduce
+	# it, byte for byte. Only done when a seed was actually asked for, because it
+	# costs the parallel speedup. Must precede the import: OpenMP reads this when
+	# the extension module loads.
+	seed = int(job.get('seed', -1))
+	if seed >= 0:
+		os.environ['OMP_NUM_THREADS'] = '1'
+
 	import open3d as o3d
 
 	voxel = float(job.get('voxel', 0.05))
@@ -225,7 +237,7 @@ def run(job):
 		targetDown, targetFpfh = featureCloud(o3d, target, voxel)
 		sourceDown, sourceFpfh = featureCloud(o3d, source, voxel)
 		result = globalRegistration(o3d, sourceDown, targetDown,
-			sourceFpfh, targetFpfh, voxel, job.get('seed', -1))
+			sourceFpfh, targetFpfh, voxel, seed)
 		metrics = grade(result, voxel * 1.5, 'global')
 		init = np.array(result.transformation, dtype=np.float64)
 		# Refining a failed global means polishing the wrong basin, which turns a

@@ -134,7 +134,7 @@ wrong answer into a convincing one.
 | Max range (m) | 0 | Drop points beyond this distance. 0 keeps everything |
 | Use coloured ICP | off | Coloured ICP. Needs colour on both clouds and wants good overlap |
 | Use mask for calibration | off | Register only the masked region. See below |
-| RANSAC seed | -1 | Passed to Open3D's RANSAC. Be aware that 0.19 does not honour it strictly, so repeated runs can still land in different solutions |
+| RANSAC seed | -1 | Leave it at -1 and RANSAC uses every core, but the same scene can give a slightly different calibration each time. Set it to 0 or more and you get the same answer every run, at the cost of that parallel speedup: Open3D's RANSAC threads race, so reproducibility means running it on one thread |
 | Preset matrix DAT | | A 4x4 table DAT, used when Mode is `From table DAT` |
 | Rebuild chain | | Recompose all transforms without re-registering |
 | Reset calibration | | Forget everything, all devices back to identity |
