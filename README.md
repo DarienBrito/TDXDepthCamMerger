@@ -41,6 +41,13 @@ Parameters that changed:
 The [walkthrough video](https://vimeo.com/501525725) still shows the 0.0.3 interface. The idea is
 the same, the parameter names are not.
 
+## Try it without a camera
+
+Open `DemoTDXDepthCamMerger.toe`. It generates three synthetic depth cameras looking at one scene
+from different places, coloured red, green and blue, and starts misaligned. Set the Python exe as
+below, pulse Gather devices, then calibrate pair 1 and 2 followed by pair 2 and 3, and watch the
+clouds come together. The START_HERE DAT in the project has the same steps.
+
 ## Installation
 
 1. Drop `TDXDepthCamMerger.tox` into your project.

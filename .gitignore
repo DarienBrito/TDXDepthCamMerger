@@ -4,6 +4,10 @@
 TDXDepthCam*.toe
 Backup/TDXDepthCam*.toe
 Backup/*.tar.gz
+DemoTDXDepthCamMerger.[0-9]*.toe
+
+# build-time log from tools/td_build_demo.py
+Log/*.log
 
 __pycache__/
 *.pyc
