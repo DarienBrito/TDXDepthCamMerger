@@ -1,0 +1,94 @@
+name: tests
+
+# What CI can and cannot cover here: the two suites below are the 59 checks that
+# need no TouchDesigner. The 78 in-TD checks (tools/td_test_devicesources.py and
+# the calibration harness) need TD, a licence and a GPU, so they stay manual.
+
+on:
+  push:
+    branches: [main, 'feat/**']
+    paths: ['src/**', 'tests/**', '.github/workflows/**']
+  pull_request:
+    paths: ['src/**', 'tests/**', '.github/workflows/**']
+  # The reason this workflow exists. Open3D is the one dependency the project
+  # does not control, and the whole out-of-process architecture is built around
+  # it, so a weekly unpinned install says when a new release breaks the worker
+  # before a user reports it.
+  # NOTE: schedule only ever runs the DEFAULT BRANCH's copy of a workflow, so
+  # this starts firing once the file is on main, not from a feature branch.
+  schedule:
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pipeline:
+    name: TD-side maths, numpy only
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install numpy
+        run: python -m pip install --upgrade pip numpy
+
+      - name: Confirm open3d really is absent
+        # test_pipeline.py asserts the TouchDesigner side imports with no open3d
+        # available. That assertion only means something on a runner where
+        # open3d is genuinely missing, so prove it rather than assume it.
+        run: |
+          python - <<'PY'
+          import importlib.util
+          import sys
+          if importlib.util.find_spec('open3d'):
+              sys.exit('open3d IS installed here, so the import guard proves nothing')
+          print('open3d absent, as this job requires')
+          PY
+
+      - name: Run test_pipeline.py
+        run: python tests/test_pipeline.py
+
+  worker:
+    name: Worker against latest open3d
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install numpy and open3d, deliberately unpinned
+        # Not pinned and not cached by version on purpose: pinning would test
+        # the release we already know works. Python stays at 3.11 to match the
+        # interpreter this is developed against, so a dropped 3.11 wheel also
+        # shows up here as a failure, which is the news we want.
+        run: python -m pip install --upgrade pip numpy open3d
+
+      - name: Record what was actually tested
+        # The scheduled run's value is this line in the log: which versions were
+        # green on which date.
+        run: |
+          python - <<'PY'
+          import sys
+          import numpy
+          import open3d
+          print('open3d {} | numpy {} | python {}'.format(
+              open3d.__version__, numpy.__version__, sys.version.split()[0]))
+          PY
+
+      - name: Run test_worker.py
+        # No argument: the suite falls back to sys.executable, which is this
+        # runner's interpreter with open3d installed.
+        run: python tests/test_worker.py
