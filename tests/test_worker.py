@@ -185,6 +185,21 @@ check('error names the cause', 'no valid points' in str(res5.get('error')), str(
 res6, _ = call(job('nocol', {'mode': 'icp', 'colored': True, 'init': list(coarse.reshape(-1))}))
 check('coloured ICP without colours -> ok:false', res6.get('ok') is False, str(res6.get('error'))[:90])
 
+# An Orbbec's colour TOP is not aligned to its depth, and a custom source can
+# point at any TOP, so the colour image can carry a different number of pixels
+# than the cloud. That used to surface as numpy's "boolean index did not match".
+np.save(os.path.join(tmp, 'bigcol.npy'), np.tile([.5, .5, .5], (len(tgtPad) * 2, 1)))
+res8, _ = call(job('miscol', {'mode': 'icp', 'colored': True,
+                              'init': list(coarse.reshape(-1)),
+                              'targetColors': os.path.join(tmp, 'bigcol.npy'),
+                              'sourceColors': os.path.join(tmp, 'srccol.npy')}))
+check('mismatched colour resolution -> ok:false', res8.get('ok') is False,
+      str(res8.get('error'))[:90])
+check('error says which cloud and both counts',
+      'target colour image' in str(res8.get('error'))
+      and str(len(tgtPad) * 2) in str(res8.get('error')),
+      str(res8.get('error'))[:120])
+
 print('\n' + '=' * 60)
 if FAILURES:
     print('{} FAILED: {}'.format(len(FAILURES), ', '.join(FAILURES)))

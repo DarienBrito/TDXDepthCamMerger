@@ -81,6 +81,27 @@ def loadPoints(path, maxRange=0.0):
 	return points, validMask(points, maxRange)
 
 
+def loadColors(path, mask, label):
+	"""
+	Colours for the points that survived filtering, one per point.
+
+	The colour image has to carry one pixel per point. A Kinect gets there
+	through the select TOP's remapimage (colour aligned to depth), but the Orbbec
+	select has no such parameter and a custom source can point at any TOP at all,
+	so a mismatch is reachable. Numpy's own complaint for it is "boolean index
+	did not match indexed array", which tells whoever ticked Use coloured ICP
+	nothing about what to do.
+	"""
+	colors = np.load(path).reshape(-1, 3)
+	if len(colors) != len(mask):
+		raise ValueError(
+			'the {} colour image has {} pixels but its point cloud has {}. '
+			'Coloured ICP needs them aligned pixel for pixel: give that device a '
+			'colour source at the point cloud resolution, or turn Use coloured '
+			'ICP off.'.format(label, len(colors), len(mask)))
+	return colors[mask]
+
+
 def makeCloud(o3d, points, colors=None):
 	cloud = o3d.geometry.PointCloud()
 	cloud.points = o3d.utility.Vector3dVector(points)
@@ -224,8 +245,8 @@ def run(job):
 	if colored:
 		if not job.get('targetColors') or not job.get('sourceColors'):
 			raise ValueError('coloured ICP needs colours for both clouds')
-		targetCol = np.load(job['targetColors']).reshape(-1, 3)[targetMask]
-		sourceCol = np.load(job['sourceColors']).reshape(-1, 3)[sourceMask]
+		targetCol = loadColors(job['targetColors'], targetMask, 'target')
+		sourceCol = loadColors(job['sourceColors'], sourceMask, 'source')
 
 	target = makeCloud(o3d, targetPts, targetCol)
 	source = makeCloud(o3d, sourcePts, sourceCol)
