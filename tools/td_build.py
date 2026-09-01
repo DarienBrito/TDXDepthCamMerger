@@ -1,5 +1,5 @@
 """
-Build TDXDepthCameraMerger 0.2.0 inside a live TouchDesigner 2025.33070.
+Build TDXDepthCamMerger 0.2.0 inside a live TouchDesigner 2025.33070.
 
 Run from TD (MCP execute_code):
 
@@ -32,7 +32,7 @@ if not os.path.isfile(SRC + '/worker.py'):
 		'before the exec.'.format(SRC))
 
 HOST = op('/ProjectName')
-NAME = 'TDXDepthCameraMerger'
+NAME = 'TDXDepthCamMerger'
 SHORTCUT = 'TDXMerger'
 OLD_SHORTCUT = 'TDAzureMerger'
 PYEXE = os.environ.get('TDX_PYTHON_EXE') or 'D:/anaconda3/envs/td/python.exe'
@@ -209,7 +209,15 @@ def installDat(name, path, x, y, language='python'):
 	return dat
 
 
-installDat('extTDAzureMerger', SRC + '/extTDAzureMerger.py', -900, 200)
+# control.tox still carries the root extension under its 0.0.3 name. Before the
+# rename the install landed on that DAT and overwrote it; now it would survive
+# as a duplicate and push the descendant count to 138.
+legacy = comp.op('extTDAzureMerger')
+if legacy is not None:
+	legacy.destroy()
+	note('removed the 0.0.3 extTDAzureMerger DAT copied from control.tox')
+
+installDat('extTDXDepthCamMerger', SRC + '/extTDXDepthCamMerger.py', -900, 200)
 installDat('extUtilities', SRC + '/extUtilities.py', -900, 80)
 installDat('workerSource', SRC + '/worker.py', -900, -40)
 note('installed extension, utilities and worker source from {}'.format(SRC))
@@ -255,7 +263,7 @@ comp.op('parexec1').par.pars = '*'
 # The Extension Object parameter holds python CODE AS A CONSTANT STRING.
 # Setting it as an expression silently fails to bind.
 comp.par.ext0object.mode = ParMode.CONSTANT
-comp.par.ext0object.val = "op('./extTDAzureMerger').module.extTDAzureMerger(me)"
+comp.par.ext0object.val = "op('./extTDXDepthCamMerger').module.extTDXDepthCamMerger(me)"
 comp.par.ext0promote = True
 comp.par.ext1object.mode = ParMode.CONSTANT
 comp.par.ext1object.val = "op('./extUtilities').module.extUtilities(me)"

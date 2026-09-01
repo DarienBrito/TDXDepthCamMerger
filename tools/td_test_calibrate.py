@@ -72,8 +72,8 @@ rig = HOST.create(containerCOMP, 'calibtest')
 rig.nodeX, rig.nodeY = 900, 400
 rig.par.parentshortcut = 'CalibTest'
 
-src = op('/ProjectName/TDXDepthCameraMerger')
-for name in ('extTDAzureMerger', 'workerSource'):
+src = op('/ProjectName/TDXDepthCamMerger')
+for name in ('extTDXDepthCamMerger', 'workerSource'):
 	d = rig.create(textDAT, name)
 	d.text = src.op(name).text
 cal = rig.create(tableDAT, 'calibrationData')
@@ -130,7 +130,7 @@ for index, points in clouds.items():
 	t.clear()
 
 rig.par.ext0object.mode = ParMode.CONSTANT
-rig.par.ext0object.val = "op('./extTDAzureMerger').module.extTDAzureMerger(me)"
+rig.par.ext0object.val = "op('./extTDXDepthCamMerger').module.extTDXDepthCamMerger(me)"
 rig.par.ext0promote = True
 rig.par.reinitextensions.pulse()
 

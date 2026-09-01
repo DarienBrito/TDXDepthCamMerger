@@ -11,7 +11,7 @@ parameter, it runs at the end of the frame. So the parexec1 rebuild trigger
 cannot be asserted inline. Part C schedules that check with delayed run() calls
 and stores its verdict on the component; read it a few frames later with
 
-    op('/ProjectName/TDXDepthCameraMerger').fetch('triggerResults')
+    op('/ProjectName/TDXDepthCamMerger').fetch('triggerResults')
 
 Part B is the headline new capability end to end: point customSources at real
 TOPs and run a real global registration plus ICP refine through the component.
@@ -25,7 +25,7 @@ Restores the component to kinectazure with an empty customSources on the way out
 
 import numpy as np
 
-COMP = op('/ProjectName/TDXDepthCameraMerger')
+COMP = op('/ProjectName/TDXDepthCamMerger')
 RIG = op('/ProjectName/calibtest')
 CLOUD = 'null_sourcePointcloud'
 
@@ -279,7 +279,7 @@ for n in failed:
 
 COMP.store('triggerResults', [])
 
-STEP = ("c = op('/ProjectName/TDXDepthCameraMerger')\n"
+STEP = ("c = op('/ProjectName/TDXDepthCamMerger')\n"
 	"c.store('triggerResults', c.fetch('triggerResults', []) + [({!r}, bool({}))])")
 
 
@@ -287,16 +287,16 @@ def schedule(code, frames):
 	run(code, delayFrames=frames, fromOP=COMP)
 
 
-schedule("op('/ProjectName/TDXDepthCameraMerger').par.Devicetype = 'orbbec'", 10)
+schedule("op('/ProjectName/TDXDepthCamMerger').par.Devicetype = 'orbbec'", 10)
 schedule(STEP.format('Devicetype -> orbbec rebuilds via parexec1',
 	"c.op('Device1/in_pointcloud').OPType == 'orbbecselectTOP' "
 	"and c.op('Device1/in_mask') is None "
 	"and c.op('Device1/switch1').par.index.mode == ParMode.CONSTANT"), 14)
-schedule("op('/ProjectName/TDXDepthCameraMerger').par.Devicetype = 'kinectazure'", 18)
+schedule("op('/ProjectName/TDXDepthCamMerger').par.Devicetype = 'kinectazure'", 18)
 schedule(STEP.format('Devicetype -> kinectazure rebuilds via parexec1',
 	"c.op('Device1/in_pointcloud').OPType == 'kinectazureselectTOP' "
 	"and c.op('Device1/in_mask') is not None "
 	"and c.op('Device1/switch1').par.index.mode == ParMode.EXPRESSION"), 22)
 
 print('\nC. parexec1 trigger scheduled. In a few frames, read:')
-print("   op('/ProjectName/TDXDepthCameraMerger').fetch('triggerResults')")
+print("   op('/ProjectName/TDXDepthCamMerger').fetch('triggerResults')")

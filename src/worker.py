@@ -1,5 +1,5 @@
 """
-TDXDepthCameraMerger registration worker.
+TDXDepthCamMerger registration worker.
 
 Runs OUTSIDE TouchDesigner, in any python 3.11+ that has open3d installed.
 Importing open3d inside TouchDesigner hard-crashes the process (duplicate native

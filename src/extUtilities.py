@@ -1,5 +1,5 @@
 """
-	Device discovery and clone management for TDXDepthCameraMerger.
+	Device discovery and clone management for TDXDepthCamMerger.
 
 	Knows nothing about Open3D. Camera specifics live in the deviceTypes table
 	so a new camera is a new row, not new code.

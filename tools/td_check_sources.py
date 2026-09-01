@@ -14,17 +14,17 @@ import os
 
 REPO = globals().get('REPO') or project.folder.replace(os.sep, '/')
 SRC = REPO + '/src'
-COMP = op('/ProjectName/TDXDepthCameraMerger')
+COMP = op('/ProjectName/TDXDepthCamMerger')
 
 PAIRS = (
-	('extTDAzureMerger', 'extTDAzureMerger.py'),
+	('extTDXDepthCamMerger', 'extTDXDepthCamMerger.py'),
 	('extUtilities', 'extUtilities.py'),
 	('workerSource', 'worker.py'),
 	('Device1/extDevice', 'extDevice.py'),
 )
 
 if COMP is None:
-	raise RuntimeError('no component at /ProjectName/TDXDepthCameraMerger')
+	raise RuntimeError('no component at /ProjectName/TDXDepthCamMerger')
 
 drifted = []
 for datPath, fileName in PAIRS:

@@ -1,4 +1,4 @@
-# TDXDepthCameraMerger
+# TDXDepthCamMerger
 
 A TouchDesigner component that merges point clouds from several depth cameras into one coordinate
 space. It estimates the rigid transform between cameras with [Open3D](http://www.open3d.org/),
@@ -43,7 +43,7 @@ the same, the parameter names are not.
 
 ## Installation
 
-1. Drop `TDXDepthCameraMerger.tox` into your project.
+1. Drop `TDXDepthCamMerger.tox` into your project.
 
 2. Get a Python 3.11 or newer with Open3D in it. Anything works as long as it is not TouchDesigner's
    own interpreter. Conda is the least painful:

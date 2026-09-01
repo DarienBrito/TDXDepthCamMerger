@@ -20,7 +20,7 @@ sys.stdout.reconfigure(encoding='utf-8')
 sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.abspath(__file__)), os.pardir, 'src'))
 
-import extTDAzureMerger as ext
+import extTDXDepthCamMerger as ext
 
 FAILURES = []
 
@@ -49,9 +49,9 @@ print('\nthe extension must import with no open3d present')
 check('open3d not imported by the extension', 'open3d' not in sys.modules,
       'the TD side must never import it; that crashes TouchDesigner')
 check('module exposes composeChain', hasattr(ext, 'composeChain'))
-check('class has no open3d loader', not hasattr(ext.extTDAzureMerger, 'open3d'))
+check('class has no open3d loader', not hasattr(ext.extTDXDepthCamMerger, 'open3d'))
 for name in ('Calibrate', 'Refine', 'RebuildChain', 'ResetCalibration', 'CheckWorker'):
-    check('public method {}'.format(name), hasattr(ext.extTDAzureMerger, name))
+    check('public method {}'.format(name), hasattr(ext.extTDXDepthCamMerger, name))
 
 
 print('\ncomposeChain')

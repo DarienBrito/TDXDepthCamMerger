@@ -1,6 +1,6 @@
 """
 
-	TDXDepthCameraMerger (DBLib)
+	TDXDepthCamMerger (DBLib)
 	____________________________
 
 	Darien Brito
@@ -95,7 +95,7 @@ def composeChain(links, reference=1):
 # _________________________________________________________________ extension
 
 
-class extTDAzureMerger:
+class extTDXDepthCamMerger:
 	"""Multi camera point cloud registration for TouchDesigner."""
 
 	def __init__(self, ownerComp):

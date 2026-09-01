@@ -1,5 +1,5 @@
 """
-	Per device helpers for TDXDepthCameraMerger.
+	Per device helpers for TDXDepthCamMerger.
 
 	Nothing here is needed for registration; the merge works without it.
 """
