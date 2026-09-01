@@ -1,0 +1,8 @@
+# TouchDesigner autoincrements on every plain save: the master and its numbered
+# backups are all regenerated locally, so only the exported .tox is tracked.
+TDXDepthCameraMerger.0.2*.toe
+Backup/TDXDepthCameraMerger.*.toe
+Backup/*.tar.gz
+
+__pycache__/
+*.pyc
