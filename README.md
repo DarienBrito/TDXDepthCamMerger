@@ -4,7 +4,7 @@ A TouchDesigner component that merges point clouds from several depth cameras in
 space. It estimates the rigid transform between cameras with [Open3D](http://www.open3d.org/),
 using FPFH features plus RANSAC for the global alignment and ICP for the refinement.
 
-Version 0.3.0. Built and tested on TouchDesigner **2025.33070**.
+Version 0.4.0. Built and tested on TouchDesigner **2025.33070**.
 
 Supported sources:
 
@@ -19,7 +19,9 @@ component they become points: the merged cloud you get back is a POP.
 
 ## If you are coming from 0.0.3, read this first
 
-0.3.0 is a breaking change, and the most important part is the install.
+0.4.0 is a breaking change, and the most important part is the install. It follows 0.0.3
+directly: 0.2.0 and 0.3.0 were development versions and were never released, and the version
+jumped to 0.4.0 so it cannot be misread as 0.0.3.
 
 **Do not put Open3D inside TouchDesigner.** The old README told you to copy it into
 `TouchDesigner/bin/Lib/site-packages`, or to pip install it into TD's Python. On current builds
@@ -34,7 +36,7 @@ no longer cares which Python TouchDesigner ships.
 
 Parameters that changed:
 
-| 0.0.3 | 0.3.0 |
+| 0.0.3 | 0.4.0 |
 |---|---|
 | `Gather kinects` | `Gather devices` |
 | `Use player for calibration` | `Use mask for calibration` |
@@ -161,13 +163,25 @@ after changing the reference device.
 
 ### Reading the result
 
-After each calibration you get **Last status**, **Last fitness**, **Last RMSE** and **Last
-correspondences**.
+After each calibration you get **Last status**, **Last fitness**, **Last RMSE**, **Last
+correspondences** and **Last overlap**.
 
 - `OK` means it converged and the numbers look sane.
 - `WARN` means it converged but the overlap or the error is marginal. Look at the merged cloud
   before trusting it.
 - `FAIL` means fitness under 0.05 or fewer than 100 corresponding points. The result is noise.
+
+**Last overlap** is the one to read first. It is the fraction of what the target camera sees that
+the source camera also sees, once the calibration is applied, and it is what actually decides
+whether a pair can be registered. Measured over an accuracy sweep: at 0.55 and above, 86 to 100%
+of pairs recovered the correct pose to a few millimetres; below it, 27%, and the failures are not
+near misses but the wrong rotational basin, metres out. A low number means move the cameras so
+they share more of the scene. No worker parameter compensates for it.
+
+It is measured after the fact, so it describes the alignment that was just found rather than the
+truth: a wrong answer reports the overlap of that wrong answer. Read it alongside the viewport,
+not instead of it. It is stored per pair in the `calibrationData` table as well, so you can see
+which link in a chain is the weak one.
 
 A confident-looking alignment from a bad global stage is the failure mode to watch for, so when a
 chained run grades the global stage as `FAIL` the component skips the ICP rather than polishing a
@@ -199,6 +213,7 @@ wrong answer into a convincing one.
 | Rebuild chain | | Recompose all transforms without re-registering |
 | Reset calibration | | Forget everything, all devices back to identity |
 | Last status, fitness, RMSE, correspondences | | Read-only, how the last run went |
+| Last overlap | | Read-only, how much of the target camera's view the source camera shares. Below 0.55 the registration is unreliable |
 
 ### Registration
 

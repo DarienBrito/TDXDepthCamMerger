@@ -1,0 +1,195 @@
+{
+	"annotates": [
+		{
+			"back": [
+				0.2,
+				0.5,
+				0.05,
+				1.0
+			],
+			"body": "One COMP per camera, cloned from Device1. Three source TOPs, because that is what the camera SDKs give; everything past them is a POP.",
+			"fontsize": 10.0,
+			"h": 108,
+			"mode": "annotate",
+			"name": "annotate1",
+			"title": "Devices",
+			"w": 382,
+			"x": -200,
+			"y": 300
+		},
+		{
+			"back": [
+				0.45,
+				0.45,
+				0.45,
+				1.0
+			],
+			"body": "The merged point cloud, the viewport that shows it",
+			"fontsize": 10.0,
+			"h": 202,
+			"mode": "annotate",
+			"name": "annotate2",
+			"title": "UI",
+			"w": 382,
+			"x": 325,
+			"y": 200
+		},
+		{
+			"back": [
+				0.05,
+				0.05,
+				0.5,
+				1.0
+			],
+			"body": "The final result",
+			"fontsize": 10.0,
+			"h": 182,
+			"mode": "annotate",
+			"name": "annotate3",
+			"title": "Merged pointcloud",
+			"w": 194,
+			"x": 425,
+			"y": -275
+		},
+		{
+			"back": [
+				0.5,
+				0.2,
+				0.05,
+				1.0
+			],
+			"body": "",
+			"fontsize": 10.0,
+			"h": 455,
+			"mode": "annotate",
+			"name": "annotate4",
+			"title": "Code and state",
+			"w": 473,
+			"x": -950,
+			"y": -72
+		},
+		{
+			"back": [
+				0.05,
+				0.4,
+				0.45,
+				1.0
+			],
+			"body": "1  Python exe -> a python 3.11 or newer that has open3d.\n   Pulse Check worker and wait for OK.\n\n2  Inputs op -> one base COMP holding your camera TOPs.\n   Name them after the device type, numbered from 1:\n   kinectazure1, orbbec1, zed1 ... one TOP per camera.\n   Pin each to its own camera: Sensor on the Kinect TOP,\n   Device on the Orbbec TOP, Camera on the ZED TOP.\n   Orbbec: set Depth Align Mode to Hardware or Software,\n   or the colours will not sit on the points.\n   ZED: set Reference Frame to Camera, not World.\n   Custom TOPs instead: one customSources row per camera,\n   naming a point cloud TOP and a colour TOP inside that\n   same base.\n   Pick your Device type, then pulse Gather devices.\n\n3  Specify pair: the first camera stays still,\n   the second one moves onto it.\n\n4  Pulse Calibrate. Watch the viewport: the two clouds\n   should land on each other.\n\n5  Three or more cameras: calibrate each one against its\n   NEIGHBOUR (1-2, then 2-3, then 3-4). Not all against 1.\n\n6  Refine polishes a calibration that is already close.\n   Reset calibration starts over.\n\nOutput is out_pop: every camera in one space, colour included.\n\nLast status only means the solver finished. It does not mean\nthe answer is right. Only the viewport tells you that. If it\nsays UNSTABLE, pulse Calibrate again.\n\nAll the best,\nDarien\nhttps://www.patreon.com/c/darienbrito\n",
+			"fontsize": 10.0,
+			"h": 703,
+			"mode": "annotate",
+			"name": "annotateHowto",
+			"title": "How to use",
+			"w": 450,
+			"x": -1550,
+			"y": -250
+		}
+	],
+	"nodes": {
+		"Device1": [
+			-75,
+			125
+		],
+		"Device1/extDevice": [
+			-275,
+			175
+		],
+		"Device1/in_color": [
+			-275,
+			-275
+		],
+		"Device1/in_mask": [
+			-275,
+			-125
+		],
+		"Device1/in_pointcloud": [
+			-50,
+			25
+		],
+		"Device1/null_pointCloud": [
+			1025,
+			25
+		],
+		"Device1/null_sourcePointcloud": [
+			500,
+			25
+		],
+		"Device1/parexec1": [
+			-275,
+			25
+		],
+		"Device1/pop_convert": [
+			150,
+			25
+		],
+		"Device1/pop_show": [
+			850,
+			25
+		],
+		"Device1/pop_transform": [
+			675,
+			25
+		],
+		"Device1/pop_valid": [
+			325,
+			25
+		],
+		"Device1/transformMatrix": [
+			500,
+			150
+		],
+		"UI": [
+			425,
+			215
+		],
+		"World": [
+			550,
+			50
+		],
+		"bg": [
+			550,
+			-50
+		],
+		"calibrationData": [
+			-675,
+			195
+		],
+		"cam1": [
+			325,
+			50
+		],
+		"customSources": [
+			-675,
+			-45
+		],
+		"deviceTypes": [
+			-675,
+			75
+		],
+		"extTDXDepthCamMerger": [
+			-900,
+			200
+		],
+		"extUtilities": [
+			-900,
+			80
+		],
+		"out_pop": [
+			448,
+			-254
+		],
+		"parexec1": [
+			-900,
+			425
+		],
+		"render1": [
+			350,
+			-50
+		],
+		"workerSource": [
+			-900,
+			-40
+		]
+	}
+}

@@ -92,6 +92,7 @@ page.appendStr('Lastfitness')
 page.appendStr('Lastrmse')
 page.appendStr('Laststatus')
 page.appendInt('Lastcorrespondences')
+page.appendStr('Lastoverlap')
 page.appendStr('Open3dstatus')
 page.appendDAT('Presetmatrixdat')
 

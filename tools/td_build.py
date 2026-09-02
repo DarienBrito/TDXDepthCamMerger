@@ -1,5 +1,5 @@
 """
-Build TDXDepthCamMerger 0.3.0 inside a running TouchDesigner 2025.33070.
+Build TDXDepthCamMerger 0.4.0 inside a running TouchDesigner 2025.33070.
 
 Run from TD (MCP execute_code):
 
@@ -13,6 +13,7 @@ the old .tox, whose saved container crashes this TD build when it cooks. Its
 children are all fine, so they are copied across.
 """
 
+import json
 import os
 
 # Taken from the open project rather than a fixed path: this file is run with
@@ -36,7 +37,7 @@ SHORTCUT = 'TDXMerger'
 OLD_SHORTCUT = 'TDAzureMerger'
 PYEXE = os.environ.get('TDX_PYTHON_EXE') or 'D:/anaconda3/envs/td/python.exe'
 
-VERSION = '0.3.0'
+VERSION = '0.4.0'
 AUTHOR = 'Darien Brito'
 
 report = []
@@ -154,6 +155,10 @@ PAGES = (
 		('Lastfitness', 'Last fitness', 'Str', {'readOnly': True}),
 		('Lastrmse', 'Last RMSE', 'Str', {'readOnly': True}),
 		('Lastcorrespondences', 'Last correspondences', 'Int', {'readOnly': True}),
+		# How much of the target camera's view the source camera also sees, once
+		# the answer is applied. The sweep found this predicts success where
+		# fitness does not, so it is reported even though it cannot be graded on.
+		('Lastoverlap', 'Last overlap', 'Str', {'readOnly': True}),
 	)),
 	('Registration', (
 		# Both stages at once is the default: calibrating from scratch wants
@@ -495,14 +500,14 @@ utils.WireMerge()
 note('merge wired to {} device(s)'.format(merge.seq.input.numBlocks))
 
 
-# ____________________________________________________ 9. annotations
+# ____________________________________________ 9. annotations, then positions
 
-# Each box costs 24 operators and about 1.9 KB in the .tox, so there are three
-# of them, one per region of the network, rather than one per cluster.
+# Each box costs 24 operators and 2 to 8 KB in the .tox, so a box covers a
+# region of the network rather than a cluster.
 
 # Comments on single operators clutter the network view, so there are none. The
-# explanations live in STRUCTURE.md and in the three boxes below. Clear any left
-# by an earlier build, or a stale one would survive forever.
+# explanations live in STRUCTURE.md and in the boxes below. Clear any left by an
+# earlier build, or a stale one would survive forever.
 cleared = 0
 for child in comp.findChildren(includeUtility=True):
 	if child.comment:
@@ -513,43 +518,59 @@ if comp.comment:
 	cleared += 1
 note('cleared {} leftover operator comments'.format(cleared))
 
-# Boxes are sized from the operators they hold, so moving a node cannot leave a
-# box behind. Padding leaves room for the title bar at the top.
-BOXES = (
-	('Code and state', ('extTDXDepthCamMerger', 'extUtilities', 'workerSource',
-		'deviceTypes', 'calibrationData', 'customSources'),
-		'The component in text. The three DATs on the left are installed from '
-		'src/ by tools/td_build.py; editing them in here is reverted by the next '
-		'build. The three tables are its state.'),
-	('Devices', ('Device1',),
-		'One COMP per camera, cloned from Device1. Three source TOPs, because '
-		'that is what the camera SDKs give; everything past them is a POP.'),
-	('Render and outputs', ('World', 'cam1', 'UI', 'render1', 'bg', 'out_pop'),
-		'The merged point cloud, the viewport that shows it, and the outPOP that '
-		'hands it downstream. No Python runs per frame in here.'),
-)
+# The arrangement and the boxes are hand made and control.tox knows nothing
+# about them, so they come from layout.json, written by tools/td_capture_layout.py.
+# Sizing boxes from the operators they hold was tried and thrown away: it cannot
+# express a box that deliberately sits beside the network, and every build undid
+# the hand work. Nothing is derived here any more, it is applied.
+LAYOUT = BUILD + '/layout.json'
+layout = None
+if os.path.isfile(LAYOUT):
+	with open(LAYOUT, encoding='utf-8') as handle:
+		layout = json.load(handle)
+else:
+	# No silent fallback to a computed layout: a build that quietly rearranges
+	# the network is the bug this file exists to fix. Say so and leave it alone.
+	note('NO {} -- nodes stay where they were created and there are no annotate '
+		'boxes. Run tools/td_capture_layout.py on a good master.'.format(LAYOUT))
 
 for old in comp.findChildren(type=annotateCOMP, maxDepth=1):
 	old.destroy()
 
-for title, members, body in BOXES:
-	ops = [comp.op(m) for m in members if comp.op(m)]
-	# 20 sideways keeps neighbouring boxes apart; 85 above leaves room for the
-	# title bar.
-	left = min(o.nodeX for o in ops) - 20
-	right = max(o.nodeX + o.nodeWidth for o in ops) + 20
-	bottom = min(o.nodeY for o in ops) - 30
-	top = max(o.nodeY + o.nodeHeight for o in ops) + 85
-	a = comp.create(annotateCOMP)
-	a.par.Mode = 'networkbox'
-	a.par.Titletext = title
-	a.par.Bodytext = body
-	a.par.Bodyfontsize = 14
-	a.par.Backcolorr, a.par.Backcolorg, a.par.Backcolorb = 0.11, 0.12, 0.15
-	a.par.Backcoloralpha = 0.6
-	a.nodeX, a.nodeY = left, bottom
-	a.nodeWidth, a.nodeHeight = right - left, top - bottom
-note('annotated {} regions'.format(len(BOXES)))
+for box in (layout or {}).get('annotates', ()):
+	a = comp.create(annotateCOMP, box['name'])
+	# create() does not honour the name for an annotate, it numbers them itself,
+	# so annotateHowto came back as annotate5. Rename after the fact.
+	a.name = box['name']
+	a.par.Mode = box.get('mode', 'networkbox')
+	a.par.Titletext = box['title']
+	a.par.Bodytext = box['body']
+	a.par.Bodyfontsize = box.get('fontsize', 10)
+	back = box.get('back', (0.11, 0.12, 0.15, 0.6))
+	for par, value in zip(('Backcolorr', 'Backcolorg', 'Backcolorb',
+			'Backcoloralpha'), back):
+		a.par[par] = value
+	a.nodeX, a.nodeY = box['x'], box['y']
+	# A box re-fits itself to its body, so the size goes on after the text.
+	a.nodeWidth, a.nodeHeight = box['w'], box['h']
+note('annotated {} regions from layout.json'.format(
+	len((layout or {}).get('annotates', ()))))
+
+
+# ____________________________________________________ 9b. positions
+
+# Last, so it overrides the positions the sections above set as they created
+# things. Those stay as a sane fallback for anything layout.json does not name.
+placed, missing = 0, []
+for path, (x, y) in sorted((layout or {}).get('nodes', {}).items()):
+	node = comp.op(path)
+	if node is None:
+		missing.append(path)
+		continue
+	node.nodeX, node.nodeY = x, y
+	placed += 1
+note('placed {} nodes from layout.json{}'.format(
+	placed, ', not found: ' + ', '.join(missing) if missing else ''))
 
 
 comp.cook(force=True)

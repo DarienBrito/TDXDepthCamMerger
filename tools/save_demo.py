@@ -44,7 +44,7 @@ comp.par.Pythonexe = ''
 # reloaded from disk at the end.
 comp.par.Pythonexe.default = ''
 for name in ('Open3dstatus', 'Open3dversion', 'Pythonversion',
-		'Laststatus', 'Lastfitness', 'Lastrmse'):
+		'Laststatus', 'Lastfitness', 'Lastrmse', 'Lastoverlap'):
 	comp.par[name] = ''
 comp.par.Lastcorrespondences = 0
 

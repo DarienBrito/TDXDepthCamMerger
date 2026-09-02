@@ -34,11 +34,18 @@ The result is JSON printed out and, if "result" is given, written to that path:
 
     {"ok": true, "matrix": [16 floats, row by row], "fitness": .., "rmse": ..,
      "correspondences": .., "stage": "global"|"icp"|"coloredIcp"|"globalThenIcp",
-     "consensus": .., "consensusLimit": .., "agreed": true|false}
+     "consensus": .., "consensusLimit": .., "agreed": true|false,
+     "overlap": ..}
 
 "consensus" is there whenever the rough match ran more than once. Read it before
 "fitness": fitness says the solver settled, consensus says the answer came out
 the same each time, and only the second tracks whether it is right.
+
+"overlap" is how much of the target camera's view the source camera also sees,
+once the matrix is applied. It is what decides whether a pair can be registered
+at all, so it is worth reading even though it is measured AFTER the fact: it
+describes the answer just found, not the truth, and a wrong pose reports the
+overlap of that wrong pose.
 
 "globalThenIcp" does the rough match and the refine in one run, which is what
 calibrating from scratch wants. Its reply carries the refined numbers plus a
@@ -79,6 +86,14 @@ RMSE_WARN_FACTOR = 0.6
 # well land wrong: saying so is an early warning, not noise. That only holds
 # while the warning is cheap, so it writes the status line and nothing more.
 CONSENSUS_WARN_FACTOR = 8.0
+
+# Overlap is measured the same way tests/synth.py measures it, at the same
+# radius, so the figure the accuracy sweep established carries over: at or above
+# 0.55 shared surface 86 to 100% of pairs recovered the pose, below it 27%, and
+# the failures are the wrong rotational basin rather than near misses. Change
+# the radius and that number stops meaning anything.
+OVERLAP_RADIUS = 0.05
+OVERLAP_SAMPLES = 4000
 
 
 # ____________________________________________________________ cloud building
@@ -293,6 +308,37 @@ def grade(result, distance, stage):
 		'correspondences': count, 'distance': float(distance), 'status': status}
 
 
+def overlapFraction(o3d, source, target, matrix,
+		radius=OVERLAP_RADIUS, samples=OVERLAP_SAMPLES):
+	"""
+	How much of what the target camera sees the source camera sees too, as a
+	fraction, once matrix has been applied.
+
+	The sample is taken with a stride rather than at random, so the answer
+	repeats without needing a seed. It is pushed through the inverse matrix into
+	the source's own space instead of moving the source cloud: the transform is
+	rigid, so the distances are the same either way, and this copies 4000 points
+	rather than all of them.
+
+	Returns None rather than raising. A calibration that worked must not be
+	thrown away because the number describing it could not be worked out.
+	"""
+	try:
+		points = np.asarray(target.points)
+		if len(points) > samples:
+			points = points[::max(1, len(points) // samples)][:samples]
+		if not len(points):
+			return None
+		inverse = np.linalg.inv(np.asarray(matrix, dtype=np.float64))
+		points = points @ inverse[:3, :3].T + inverse[:3, 3]
+		probe = o3d.geometry.PointCloud()
+		probe.points = o3d.utility.Vector3dVector(points)
+		distances = np.asarray(probe.compute_point_cloud_distance(source))
+		return float((distances < radius).mean())
+	except Exception:
+		return None
+
+
 def applyConsensus(metrics, consensus, limit):
 	"""
 	Stamp how far apart the repeated rough matches landed onto the metrics.
@@ -367,11 +413,15 @@ def mergeGlobalMetrics(metrics, globalMetrics):
 # _____________________________________________________________________ entry
 
 
-def reply(matrix, metrics, targetCount, sourceCount):
+def reply(matrix, metrics, targetCount, sourceCount, overlap=None):
 	out = {'ok': True, 'matrix': [float(v) for v in np.asarray(matrix).reshape(-1)]}
 	out.update(metrics)
 	out['targetPoints'] = int(targetCount)
 	out['sourcePoints'] = int(sourceCount)
+	# Left out entirely when it could not be measured, rather than sent as a
+	# zero that reads like two cameras sharing nothing.
+	if overlap is not None:
+		out['overlap'] = float(overlap)
 	return out
 
 
@@ -395,6 +445,7 @@ def run(job):
 	target, source, targetCount, sourceCount = loadClouds(o3d, job, colored)
 
 	globalMetrics = None
+	matrix = metrics = None
 	if mode in ('global', 'globalThenIcp'):
 		# A seeded run comes out the same every time, so asking four of them
 		# whether they agree answers nothing: a seed turns the consensus check
@@ -404,15 +455,20 @@ def run(job):
 		# Refining a failed rough match just polishes a wrong answer into a
 		# confident looking one. Hand the failure back instead.
 		if mode == 'global' or globalMetrics['status'] == 'FAIL':
-			return reply(init, globalMetrics, targetCount, sourceCount)
+			matrix, metrics = init, globalMetrics
 	else:
 		init = job.get('init')
 		init = np.eye(4) if not init else np.array(init, dtype=np.float64).reshape(4, 4)
 
-	matrix, metrics = refineStage(o3d, source, target, voxel, refineVoxel, init, colored)
-	if globalMetrics is not None:
-		mergeGlobalMetrics(metrics, globalMetrics)
-	return reply(matrix, metrics, targetCount, sourceCount)
+	if metrics is None:
+		matrix, metrics = refineStage(o3d, source, target, voxel, refineVoxel, init, colored)
+		if globalMetrics is not None:
+			mergeGlobalMetrics(metrics, globalMetrics)
+
+	# One exit, so the overlap is measured once, against whatever matrix is
+	# actually being handed back.
+	return reply(matrix, metrics, targetCount, sourceCount,
+		overlapFraction(o3d, source, target, matrix))
 
 
 def probe():

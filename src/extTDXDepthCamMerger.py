@@ -35,7 +35,7 @@ WORKER_TIMEOUT = 900
 
 MATRIX_COLUMNS = [f'm{r}{c}' for r in range(4) for c in range(4)]
 CALIBRATION_COLUMNS = ['device', 'parent', 'method', 'fitness', 'rmse',
-	'correspondences', 'status'] + MATRIX_COLUMNS
+	'correspondences', 'overlap', 'status'] + MATRIX_COLUMNS
 
 
 def deviceName(index):
@@ -270,10 +270,15 @@ class extTDXDepthCamMerger:
 
 	def storeCalibration(self, device, parent, matrix, result):
 		table = self.calibrationTable()
+		# An overlap that could not be measured is left blank rather than
+		# written as 0.000, which would read as two cameras sharing nothing.
+		overlap = result.get('overlap')
 		row = [str(int(device)), str(int(parent)), result.get('stage', '?'),
 			'{:.6f}'.format(result.get('fitness', 0.0)),
 			'{:.6f}'.format(result.get('rmse', 0.0)),
-			str(result.get('correspondences', 0)), result.get('status', '?')]
+			str(result.get('correspondences', 0)),
+			'' if overlap is None else '{:.3f}'.format(overlap),
+			result.get('status', '?')]
 		row += [repr(float(v)) for v in np.asarray(matrix, dtype=np.float64).reshape(-1)]
 
 		existing = table.row(str(int(device)))
@@ -327,10 +332,19 @@ class extTDXDepthCamMerger:
 		self.ownerComp.par.Lastfitness = '{:.4f}'.format(result.get('fitness', 0.0))
 		self.ownerComp.par.Lastrmse = '{:.5f}'.format(result.get('rmse', 0.0))
 		self.ownerComp.par.Lastcorrespondences = int(result.get('correspondences', 0))
+		# Blank rather than zero when there is none: a matrix taken from a table
+		# was not measured against any cloud, so there is nothing to report.
+		overlap = result.get('overlap')
+		self.ownerComp.par.Lastoverlap = (
+			'' if overlap is None else '{:.3f}'.format(overlap))
 		parts = ['{}: {} fitness {:.3f}, rmse {:.4f} m over {} points'.format(
 			result.get('status', '?'), result.get('stage', '?'),
 			result.get('fitness', 0.0), result.get('rmse', 0.0),
 			result.get('correspondences', 0))]
+		# Overlap is what decides whether a pair can be registered at all, so it
+		# goes in the line the user actually reads.
+		if overlap is not None:
+			parts.append('overlap {:.2f}'.format(overlap))
 		first = result.get('global')
 		if first:
 			parts.append('(global stage: fitness {:.3f}, rmse {:.4f} m)'.format(
