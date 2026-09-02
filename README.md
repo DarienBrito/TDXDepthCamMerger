@@ -4,7 +4,7 @@ A TouchDesigner component that merges point clouds from several depth cameras in
 space. It estimates the rigid transform between cameras with [Open3D](http://www.open3d.org/),
 using FPFH features plus RANSAC for the global alignment and ICP for the refinement.
 
-Version 0.2.0. Built and tested on TouchDesigner **2025.33070**.
+Version 0.3.0. Built and tested on TouchDesigner **2025.33070**.
 
 Supported sources:
 
@@ -13,9 +13,12 @@ Supported sources:
 - any pair of TOPs you supply yourself (a point cloud TOP and a colour TOP), so recorded clouds,
   other sensors and synthetic data all work
 
+The cameras come in as TOPs, because that is what their TouchDesigner operators produce. Inside the
+component they become points: the merged cloud you get back is a POP.
+
 ## If you are coming from 0.0.3, read this first
 
-0.2.0 is a breaking change, and the most important part is the install.
+0.3.0 is a breaking change, and the most important part is the install.
 
 **Do not put Open3D inside TouchDesigner.** The old README told you to copy it into
 `TouchDesigner/bin/Lib/site-packages`, or to pip install it into TD's Python. On current builds
@@ -23,14 +26,14 @@ that hard-crashes the process the moment the component imports it. Not an except
 the whole of TouchDesigner disappears. Open3D ships its own OpenMP and TBB next to the ones
 TouchDesigner already loaded, and the two do not coexist.
 
-So 0.2.0 runs the registration **outside** TouchDesigner. You point the component at any Python
+So the component runs the registration **outside** TouchDesigner. You point the component at any Python
 that has Open3D installed, it dumps the clouds to disk, runs a worker process, and reads back a
 4x4 matrix. TouchDesigner itself only ever imports numpy. A nice side effect is that the component
 no longer cares which Python TouchDesigner ships.
 
 Parameters that changed:
 
-| 0.0.3 | 0.2.0 |
+| 0.0.3 | 0.3.0 |
 |---|---|
 | `Gather kinects` | `Gather devices` |
 | `Use player for calibration` | `Use mask for calibration` |
@@ -76,10 +79,50 @@ clouds come together. The START_HERE DAT in the project has the same steps.
 Developed against Open3D 0.19.0. Nothing in the worker is exotic, so nearby versions should be
 fine, but that is the one I test.
 
+## Connecting the cameras
+
+The component does not create the camera operators, it reads the ones you make. Put them all in
+one base COMP and point **Inputs op** at it.
+
+1. Add one camera TOP per physical camera, inside that base, named after the device type with the
+   device number appended: `kinectazure1`, `kinectazure2`, ... or `orbbec1`, `orbbec2`, ... The
+   names matter. Each `Device<n>` the component builds looks for the TOP whose number matches.
+
+2. Pin each TOP to one camera: **Sensor** on the Kinect Azure TOP, **Device** on the Orbbec TOP.
+   One TOP per camera, never two on the same serial.
+
+3. Set **Inputs op** on the **Setup** page to that base, then pulse **Gather devices**. The
+   component counts the cameras listed by the first TOP's device menu and builds a `Device<n>` for
+   each, so **Number of devices** should match what you plugged in. If it comes back empty, or
+   short, give the cameras a moment and pulse again: an Orbbec camera can take up to 30 seconds to
+   appear after being plugged in.
+
+Everything downstream is the same for both cameras. The extra streams each `Device<n>` needs come
+from select TOPs the component makes for you.
+
+### Orbbec
+
+Set **Depth Align Mode** on the Orbbec TOP to `Hardware` or `Software`. The colour camera and the
+depth camera see the scene from slightly different places, so with alignment disabled the colours
+that arrive on the merged cloud belong to the wrong points. On the Kinect the equivalent switch
+lives on the select TOP and the component sets it itself; the Orbbec select has no such parameter,
+so this one is yours.
+
+If you have a Femto Mega or a Femto Bolt, prefer the **Kinect Azure TOP** with its **Hardware
+Type** set to `Orbbec Compatible`, and set **Device type** to `Kinect Azure` here. Those cameras
+support body tracking that way, which gets you the player index and therefore masking. Do not use
+the Orbbec TOP and the Kinect Azure operators in the same project, TouchDesigner warns that the
+combination is unstable.
+
+The Orbbec path is built on TouchDesigner's Orbbec operators and verified inside TouchDesigner
+without a camera attached. I have not been able to run it against physical Orbbec hardware yet, so
+if something behaves oddly there, please open an issue.
+
 ## Using it
 
-1. **Setup** page: pick your **Device type**, then pulse **Gather devices**. The component
-   builds one `Device<n>` for each camera it finds and wires up its source TOPs.
+1. **Setup** page: pick your **Device type**, set **Inputs op** to the base holding your camera
+   TOPs (see above), then pulse **Gather devices**. The component builds one `Device<n>` for each
+   camera it finds and wires up its source TOPs.
 
 2. **Calibrate** page: set **Specify pair** to the two cameras. The first field is the target,
    which does not move; the second is the source, which gets transformed onto it. The **IDs**
@@ -92,7 +135,7 @@ fine, but that is the one I test.
    then 2 and 3, then 3 and 4. Every pairwise result is stored, and the component composes the
    chain so all clouds land in the frame of **Reference device**.
 
-5. Read the merged result from the `out_points` and `out_colors` outputs.
+5. Read the merged result from the `out_pop` output.
 
 Pulse **Refine** to run ICP again on an existing calibration. It never falls back to a fresh global
 registration, so refine means refine. **Reset calibration** puts every device back at identity.
@@ -120,6 +163,7 @@ wrong answer into a convincing one.
 | Parameter | What it does |
 |---|---|
 | Device type | `Kinect Azure`, `Orbbec` or `Custom TOPs`. Changing it rebuilds every device's source TOPs |
+| Inputs op | The base COMP holding your camera TOPs. Every device type reads it, including `Custom TOPs`, where table cells are looked up inside it |
 | Gather devices | Find the connected cameras and build a `Device<n>` for each |
 | Number of devices, Devices | Read-only, what was found |
 | Python exe | The interpreter that runs the registration. Must have Open3D |
@@ -162,14 +206,22 @@ soon as at least one row supplies a mask TOP.
 
 ## Outputs
 
-The component has two TOP outputs:
+The component has one output, `out_pop`. It is a POP: every device's transformed cloud, merged
+into a single point set in the reference camera's frame, carrying two attributes.
 
-- `out_points`, every device's transformed cloud tiled into one texture. RGB carries XYZ in the
-  reference frame
-- `out_colors`, the matching colours in the same layout
+- `P`, the position
+- `Color`, the colour that camera saw at that point
 
-Feed both to instancing, or to whatever you were going to do with the cloud. You do not need to
-reach inside the component.
+Only points a camera actually returned are in there. The pixels a depth sensor reports as invalid
+are deleted inside each device, before the merge, so the count you get is the real one and every
+colour belongs to the point it sits on.
+
+Drop it into a geometry COMP to render it, feed it to instancing, or keep processing it with POPs.
+You do not need to reach inside the component.
+
+**Coming from 0.2.0:** this replaces the `out_points` and `out_colors` TOP outputs, which tiled the
+clouds into two textures. If you were reading those, you now read one POP instead. A `POP to TOP`
+gets you back to the old shape if you need it.
 
 ## Custom TOP sources
 
@@ -181,9 +233,9 @@ one row per device:
 | cam1 | `/project1/clouds/cloud1` | `/project1/clouds/color1` | |
 | cam2 | `/project1/clouds/cloud2` | `/project1/clouds/color2` | |
 
-Then pulse **Gather devices** and calibrate as usual. The colour TOP should be the same resolution
-as its point cloud TOP, otherwise the two will not line up. Leave `mask` empty if you do not have
-one.
+Then pulse **Gather devices** and calibrate as usual. The colour TOP does not have to match the
+point cloud TOP's resolution: it is sampled per point, not paired pixel by pixel. Leave `mask`
+empty if you do not have one.
 
 This is also how you add a camera the component does not know about yet. If your sensor has a
 TouchDesigner TOP that can output a point cloud, adding a row to the `deviceTypes` table is enough,
@@ -195,8 +247,8 @@ The technique needs real overlap between cameras, seen from broadly similar angl
 at more than about 90 degrees to each other, and certainly cameras facing each other, do not give
 RANSAC enough common structure to work with.
 
-You can get around this by calibrating through intermediate positions, and the chain composition in
-0.2.0 does that part for you: calibrate 1 to 2 and 2 to 3, and camera 3 lands in camera 1's frame
+You can get around this by calibrating through intermediate positions, and the chain composition
+does that part for you: calibrate 1 to 2 and 2 to 3, and camera 3 lands in camera 1's frame
 even though 1 and 3 never saw the same thing. Move a camera through a path of overlapping views
 and you can reach positions a direct pair could not.
 
