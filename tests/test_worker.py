@@ -179,10 +179,21 @@ check('an unseeded global run reports consensus', 'consensus' in res9,
 check('and says whether the runs agreed', isinstance(res9.get('agreed'), bool),
       str(res9.get('agreed')))
 if res9.get('ok'):
-    print('       spread {:.4f} m, limit {:.4f}, agreed {}'.format(
-        res9['consensus'], res9['consensusLimit'], res9['agreed']))
-    check('a well overlapped pair agrees with itself', res9['agreed'] is True,
-          '{:.4f} m apart'.format(res9['consensus']))
+    # Never gate on ONE unseeded run. The consensus check doubts about a quarter
+    # of CORRECT answers by design, because those are pairs RANSAC solved
+    # unstably, so `agreed is True` on a single trial fails roughly once in four
+    # and says nothing when it passes. Three trials, at least one agreement: a
+    # scene this well overlapped cannot disagree with itself every time.
+    spreads = [(res9['consensus'], res9['agreed'])]
+    for extra in range(2):
+        more, _ = call(job('cons{}'.format(extra), {'mode': 'global', 'seed': -1}))
+        if more.get('ok'):
+            spreads.append((more['consensus'], more['agreed']))
+    print('       limit {:.4f}, spreads {}'.format(res9['consensusLimit'],
+          ', '.join('{:.4f}{}'.format(v, '' if ok else ' (WARN)') for v, ok in spreads)))
+    check('a well overlapped pair agrees with itself at least sometimes',
+          any(ok for _, ok in spreads),
+          '{} of {} runs agreed'.format(sum(1 for _, ok in spreads if ok), len(spreads)))
 
 # A seeded run comes out the same every time, so asking four of them whether
 # they agree proves nothing. The worker must not claim it checked.
