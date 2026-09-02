@@ -297,52 +297,11 @@ installDat('workerSource', SRC + '/worker.py', -900, -40)
 note('installed extension, utilities and worker source from {}'.format(SRC))
 note('python exe: {}'.format(PYEXE))
 
-comp.op('parexec1').text = '''# Handles every parameter on the component: the work goes to the extensions, the
-# three About buttons open a link in the system browser. Nothing here loads a
-# web page inside TouchDesigner.
+# parexec1 is a parameterexecuteDAT created by control.tox, so only its TEXT is
+# installed here. Keeping it in src/ is what lets td_check_sources.py notice a DAT
+# edited inside TD; while the text lived in this script nothing compared the two.
+comp.op('parexec1').text = open(SRC + '/parexec1.py', encoding='utf-8').read()
 
-import webbrowser
-
-LINKS = {
-	'Readme': 'https://github.com/DarienBrito/TDXDepthCamMerger',
-	'Support': 'https://www.patreon.com/c/darienbrito',
-	'Website': 'https://www.darienbrito.com',
-}
-
-
-def onValueChange(par, prev):
-	comp = parent()
-	if par.name in ('Specifypair1', 'Specifypair2', 'Devices'):
-		comp.SetIds()
-	elif par.name == 'Devicetype':
-		# Rebuild the template straight away rather than leaving the old camera
-		# selects in place until the next Gather devices pulse. RebuildDevices,
-		# not BuildDeviceSources: rebuilding destroys the template's operators,
-		# and every clone has to be copied again afterwards.
-		comp.RebuildDevices()
-	return
-
-
-def onPulse(par):
-	comp = parent()
-	name = par.name
-
-	if name == 'Calibrate':
-		comp.Calibrate(pair=comp.GetPair(), mode=comp.par.Mode.eval())
-	elif name == 'Refine':
-		comp.Refine(pair=comp.GetPair())
-	elif name == 'Gatherdevices':
-		comp.GatherDevices()
-	elif name == 'Rebuildchain':
-		comp.RebuildChain()
-	elif name == 'Resetcalibration':
-		comp.ResetCalibration()
-	elif name == 'Checkworker':
-		comp.CheckWorker()
-	elif name in LINKS:
-		webbrowser.open(LINKS[name])
-	return
-'''
 comp.op('parexec1').par.ops = comp
 comp.op('parexec1').par.pars = '*'
 
