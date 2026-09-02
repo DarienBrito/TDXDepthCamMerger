@@ -1,0 +1,15 @@
+# TouchDesigner autoincrements on every plain save: the master and its numbered
+# backups are all regenerated locally, so only the exported .tox is tracked.
+# The glob covers the pre-rename TDXDepthCameraMerger files too.
+TDXDepthCam*.toe
+Backup/TDXDepthCam*.toe
+Backup/*.tar.gz
+DemoTDXDepthCamMerger.[0-9]*.toe
+
+# Nothing under Log/ is ours to track: tools/save_demo.py writes demo_save.log
+# there, and TD's Orbbec SDK drops OrbbecSDK.log.txt beside it the moment an
+# orbbecTOP exists, which .log alone does not match.
+Log/
+
+__pycache__/
+*.pyc
