@@ -1,8 +1,8 @@
 name: tests
 
-# What CI can and cannot cover here: the two suites below are the 59 checks that
-# need no TouchDesigner. The 78 in-TD checks (tools/td_test_devicesources.py and
-# the calibration harness) need TD, a licence and a GPU, so they stay manual.
+# What CI can and cannot cover here: the three suites below need no
+# TouchDesigner. The 78 in-TD checks (tools/td_test_devicesources.py and the
+# calibration harness) need TD, a licence and a GPU, so they stay manual.
 
 on:
   push:
@@ -92,3 +92,29 @@ jobs:
         # No argument: the suite falls back to sys.executable, which is this
         # runner's interpreter with open3d installed.
         run: python tests/test_worker.py
+
+  quality:
+    name: Registration quality on synthetic clouds
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Install numpy and open3d, deliberately unpinned
+        run: python -m pip install --upgrade pip numpy open3d
+
+      - name: Run test_registration_quality.py
+        # --quick on a push, the full sweep on the weekly cron and on demand.
+        # The quick pass is ~30 s and still gates every section; the full pass
+        # runs 32 sweep trials instead of 12, which is what makes the success
+        # RATE gates meaningful rather than anecdotal.
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "pull_request" ]; then
+            python tests/test_registration_quality.py --quick
+          else
+            python tests/test_registration_quality.py
+          fi
