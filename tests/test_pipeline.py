@@ -126,8 +126,12 @@ check('looksRigid rejects a broken bottom row', not ext.looksRigid(bad))
 
 
 print('\ncalibration table schema')
-check('23 columns per row (7 metadata + 16 matrix)', len(ext.CALIBRATION_COLUMNS) == 7 + 16,
+check('24 columns per row (8 metadata + 16 matrix)', len(ext.CALIBRATION_COLUMNS) == 8 + 16,
       str(len(ext.CALIBRATION_COLUMNS)))
+check('the metadata columns are the ones the extension writes',
+      ext.CALIBRATION_COLUMNS[:8] == ['device', 'parent', 'method', 'fitness', 'rmse',
+                                      'correspondences', 'overlap', 'status'],
+      ', '.join(ext.CALIBRATION_COLUMNS[:8]))
 check('matrix columns are row major m00..m33',
       ext.MATRIX_COLUMNS[:5] == ['m00', 'm01', 'm02', 'm03', 'm10'])
 check('device prefix is Device', ext.DEVICE_PREFIX == 'Device')

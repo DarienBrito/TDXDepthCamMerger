@@ -128,6 +128,15 @@ if res.get('ok'):
     check('invalid zero rows were filtered', res['sourcePoints'] == len(src),
           '{} vs {}'.format(res['sourcePoints'], len(src)))
     check('result file written', os.path.isfile(base['result']))
+    # These two halves are cut at x > -1.10 and x < 1.10 out of a scene about
+    # 3 m across, so most of what the target sees the source sees too. The
+    # number itself is checked against ground truth in the quality suite, where
+    # synth.py can say what the overlap really is; here it is the contract.
+    over = res.get('overlap')
+    check('reports an overlap in range', isinstance(over, float) and 0.0 <= over <= 1.0,
+          repr(over))
+    check('two halves cut from one scene overlap heavily', over is not None and over > .6,
+          '{}'.format(over))
     coarse = M
 
 print('\nICP refine, seeded from the global result')

@@ -204,6 +204,9 @@ def trial(label, target, source, expected, tolM=GOOD_M, tolDeg=GOOD_DEG, **kw):
            'gross': bool(t > 0.25 or d > 10.0), 'seconds': res['seconds'],
            'agreed': bool(res.get('agreed', True)),
            'consensus': res.get('consensus'),
+           # What the worker told the user the overlap was, next to what it
+           # really is. They should agree whenever the pose came out right.
+           'reported': res.get('overlap'),
            'points': res['sourcePoints'], 'matrix': Mr}
     trials.append(row)
     print('  {:<22} ov {:.2f}  {:8.4f} m {:8.3f} deg  fit {:.3f}  {:<4}  {}  {:.1f}s'.format(
@@ -252,6 +255,23 @@ if reliable:
         np.median(ms), np.median(ds), ms.max(), ds.max()))
     check('median accuracy stays well under a centimetre', float(np.median(ms)) < 0.015,
           '{:.4f} m'.format(np.median(ms)))
+# The component shows the user this number and the README hangs the 0.55 advice
+# on it, so it has to be the same quantity synth.py measures, not merely a
+# plausible one. Only recovered trials count: on a wrong pose the reported
+# overlap correctly describes that wrong pose, which is a different number.
+recovered = [r for r in trials if r['good'] and r['reported'] is not None]
+if recovered:
+    gaps = np.array([abs(r['reported'] - r['overlap']) for r in recovered])
+    print('  reported overlap vs ground truth over {} recovered trials: '
+          'median {:.3f}, worst {:.3f}'.format(len(recovered), np.median(gaps), gaps.max()))
+    check('the overlap the worker reports is the overlap synth measures',
+          float(gaps.max()) < 0.10,
+          ', '.join('{} ({:.2f} vs {:.2f})'.format(r['label'], r['reported'], r['overlap'])
+                    for r in recovered if abs(r['reported'] - r['overlap']) >= 0.10))
+check('every trial reported an overlap',
+      all(r['reported'] is not None for r in trials),
+      ', '.join(r['label'] for r in trials if r['reported'] is None))
+
 if marginal:
     marginalRate = sum(r['good'] for r in marginal) / len(marginal)
     finding('below {:.0%} overlap only {:.0%} of {} runs recovered the pose, and the '

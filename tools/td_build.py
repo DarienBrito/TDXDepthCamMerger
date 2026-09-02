@@ -155,6 +155,10 @@ PAGES = (
 		('Lastfitness', 'Last fitness', 'Str', {'readOnly': True}),
 		('Lastrmse', 'Last RMSE', 'Str', {'readOnly': True}),
 		('Lastcorrespondences', 'Last correspondences', 'Int', {'readOnly': True}),
+		# How much of the target camera's view the source camera also sees, once
+		# the answer is applied. The sweep found this predicts success where
+		# fitness does not, so it is reported even though it cannot be graded on.
+		('Lastoverlap', 'Last overlap', 'Str', {'readOnly': True}),
 	)),
 	('Registration', (
 		# Both stages at once is the default: calibrating from scratch wants
