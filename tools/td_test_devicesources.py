@@ -115,7 +115,7 @@ check('Device1 present', device is not None)
 
 # ____________________________________________________________ A. per type
 
-for kind in ('kinectazure', 'orbbec', 'custom'):
+for kind in ('kinectazure', 'orbbec', 'zed', 'custom'):
 	print('\nA. Devicetype = {}'.format(kind))
 	spec = rowSpec(kind)
 	wantsMask = kind == 'custom' or bool(spec['image_mask'])
@@ -140,6 +140,14 @@ for kind in ('kinectazure', 'orbbec', 'custom'):
 	for name in names:
 		check('{}: {} is a {}'.format(kind, name, spec['selectop']),
 			device.op(name).OPType == spec['selectop'], device.op(name).OPType)
+		# Which parameter names the camera TOP is per camera: ZED's select calls
+		# it zedtop, everyone else's calls it top. Writing the wrong one raises
+		# rather than leaving a source pointing at nothing.
+		sourcePar = spec.get('sourcepar') or 'top'
+		par = getattr(device.op(name).par, sourcePar, None)
+		check('{}: {} reads its source through "{}"'.format(kind, name, sourcePar),
+			par is not None and par.mode == ParMode.EXPRESSION and bool(par.expr),
+			repr(par.expr)[:60] if par is not None else 'no such parameter')
 
 	if kind != 'custom':
 		check('{}: pointcloud image = {}'.format(kind, spec['image_pointcloud']),
@@ -205,10 +213,12 @@ for kind in ('kinectazure', 'orbbec', 'custom'):
 		and abs(keep.par.bound0translatex.eval()) < 1e-9,
 		'{} block(s), r={}'.format(keep.seq.bound.numBlocks,
 			keep.par.bound0scalex.eval()))
-	if kind == 'orbbec':
-		check('orbbec: no mask condition at all',
+	if not wantsMask:
+		# Orbbec publishes no player index, and ZED's body mask is deliberately
+		# not wired, so both come out with the invalid-pixel condition alone.
+		check('{}: no mask condition at all'.format(kind),
 			keep.seq.attr.numBlocks == 1,
-			'{} blocks; this camera has no player index'.format(keep.seq.attr.numBlocks))
+			'{} blocks; this camera type supplies no mask'.format(keep.seq.attr.numBlocks))
 	else:
 		check('{}: mask condition present and expression driven'.format(kind),
 			keep.seq.attr.numBlocks == 2

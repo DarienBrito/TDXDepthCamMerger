@@ -10,6 +10,7 @@ Supported sources:
 
 - Kinect Azure
 - Orbbec
+- ZED
 - any pair of TOPs you supply yourself (a point cloud TOP and a colour TOP), so recorded clouds,
   other sensors and synthetic data all work
 
@@ -85,11 +86,12 @@ The component does not create the camera operators, it reads the ones you make. 
 one base COMP and point **Inputs op** at it.
 
 1. Add one camera TOP per physical camera, inside that base, named after the device type with the
-   device number appended: `kinectazure1`, `kinectazure2`, ... or `orbbec1`, `orbbec2`, ... The
-   names matter. Each `Device<n>` the component builds looks for the TOP whose number matches.
+   device number appended: `kinectazure1`, `kinectazure2`, ... or `orbbec1`, `orbbec2`, ... or
+   `zed1`, `zed2`, ... The names matter. Each `Device<n>` the component builds looks for the TOP
+   whose number matches.
 
-2. Pin each TOP to one camera: **Sensor** on the Kinect Azure TOP, **Device** on the Orbbec TOP.
-   One TOP per camera, never two on the same serial.
+2. Pin each TOP to one camera: **Sensor** on the Kinect Azure TOP, **Device** on the Orbbec TOP,
+   **Camera** on the ZED TOP. One TOP per camera, never two on the same serial.
 
 3. Set **Inputs op** on the **Setup** page to that base, then pulse **Gather devices**. The
    component counts the cameras listed by the first TOP's device menu and builds a `Device<n>` for
@@ -97,7 +99,7 @@ one base COMP and point **Inputs op** at it.
    short, give the cameras a moment and pulse again: an Orbbec camera can take up to 30 seconds to
    appear after being plugged in.
 
-Everything downstream is the same for both cameras. The extra streams each `Device<n>` needs come
+Everything downstream is the same for every camera. The extra streams each `Device<n>` needs come
 from select TOPs the component makes for you.
 
 ### Orbbec
@@ -117,6 +119,21 @@ combination is unstable.
 The Orbbec path is built on TouchDesigner's Orbbec operators and verified inside TouchDesigner
 without a camera attached. I have not been able to run it against physical Orbbec hardware yet, so
 if something behaves oddly there, please open an issue.
+
+### ZED
+
+Set **Reference Frame** on the ZED TOP to `Camera`, not `World`. In world mode the point cloud is
+expressed in the frame the camera started in and moves with the camera's own tracking, which fights
+the calibration you are trying to measure. The point cloud itself is metres relative to the colour
+camera, the same convention the other two use.
+
+The ZED body mask is not wired up, so **Use mask for calibration** is greyed out. It exists on the
+ZED TOP, but it holds body IDs, it only appears once body tracking is running through a ZED CHOP,
+and the threshold here was tuned against the Kinect's player index. Ask for it if you want it, and
+in the meantime `Custom TOPs` lets you supply any mask you like.
+
+Same caveat as Orbbec: this path is built on TouchDesigner's ZED operators and checked inside
+TouchDesigner without a camera attached, not against physical hardware.
 
 ## Using it
 
@@ -162,7 +179,7 @@ wrong answer into a convincing one.
 
 | Parameter | What it does |
 |---|---|
-| Device type | `Kinect Azure`, `Orbbec` or `Custom TOPs`. Changing it rebuilds every device's source TOPs |
+| Device type | `Kinect Azure`, `Orbbec`, `ZED` or `Custom TOPs`. Changing it rebuilds every device's source TOPs |
 | Inputs op | The base COMP holding your camera TOPs. Every device type reads it, including `Custom TOPs`, where table cells are looked up inside it |
 | Gather devices | Find the connected cameras and build a `Device<n>` for each |
 | Number of devices, Devices | Read-only, what was found |

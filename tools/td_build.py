@@ -128,8 +128,8 @@ PAGES = (
 	('Setup', (
 		('Inputsop', 'Inputs op', 'OP', {}),
 		('Devicetype', 'Device type', 'Menu', {
-			'menuNames': ('kinectazure', 'orbbec', 'custom'),
-			'menuLabels': ('Kinect Azure', 'Orbbec', 'Custom TOPs')}),
+			'menuNames': ('kinectazure', 'orbbec', 'zed', 'custom'),
+			'menuLabels': ('Kinect Azure', 'Orbbec', 'ZED', 'Custom TOPs')}),
 		('Gatherdevices', 'Gather devices', 'Pulse', {}),
 		('Numberofdevices', 'Number of devices', 'Int', {'readOnly': True}),
 		('Devices', 'Devices', 'Str', {'readOnly': True}),
@@ -221,11 +221,18 @@ def table(name, rows, x, y):
 	return t
 
 
+# sourcepar is the parameter on the SELECT that names the camera TOP. Kinect and
+# Orbbec call it `top`, ZED calls it `zedtop`. ZED's mask image is deliberately
+# empty: it holds body IDs and needs body tracking on through a ZED CHOP, and the
+# mask threshold here was tuned against the Kinect's player index.
 table('deviceTypes', [
-	['type', 'cameraop_name', 'selectop', 'image_pointcloud', 'image_color', 'image_mask', 'devicepar'],
-	['kinectazure', 'kinectazure', 'kinectazureselectTOP', 'pointcloud', 'color', 'playerindex', 'sensor'],
-	['orbbec', 'orbbec', 'orbbecselectTOP', 'pointcloud', 'color', '', 'device'],
-	['custom', '', 'selectTOP', '', '', '', ''],
+	['type', 'cameraop_name', 'selectop', 'image_pointcloud', 'image_color', 'image_mask',
+		'devicepar', 'sourcepar'],
+	['kinectazure', 'kinectazure', 'kinectazureselectTOP', 'pointcloud', 'color', 'playerindex',
+		'sensor', 'top'],
+	['orbbec', 'orbbec', 'orbbecselectTOP', 'pointcloud', 'color', '', 'device', 'top'],
+	['zed', 'zed', 'zedselectTOP', 'pointcloud', 'color', '', 'camera', 'zedtop'],
+	['custom', '', 'selectTOP', '', '', '', '', 'top'],
 ], -600, -200)
 
 table('customSources', [['name', 'pointcloud', 'color', 'mask']], -600, -320)

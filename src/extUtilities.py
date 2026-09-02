@@ -467,6 +467,10 @@ class extUtilities:
 		This is what makes a new camera a table row instead of new code. Only
 		the Device1 template needs it: clones copy the template, and each source
 		finds its own camera through `parent().digits`.
+
+		Which parameter on the select names the camera TOP is per camera too:
+		Kinect and Orbbec call it `top`, ZED calls it `zedtop`. The row says
+		which, and an older table with no such column still means `top`.
 		"""
 		me = self.ownerComp
 		if device is None:
@@ -477,6 +481,7 @@ class extUtilities:
 		spec = self.deviceTypeRow()
 		shortcut = me.par.parentshortcut.eval()
 		custom = spec['type'] == 'custom'
+		sourcePar = spec.get('sourcepar') or 'top'
 
 		destroyByName(device, SOURCE_NAMES + LEGACY_SOURCE_NAMES)
 
@@ -488,7 +493,11 @@ class extUtilities:
 				raise ValueError('deviceTypes row "{}" names an operator type TD does '
 					'not know: "{}" ({})'.format(spec['type'], spec['selectop'], exc))
 			top.nodeX, top.nodeY = SOURCE_POSITIONS[name]
-			top.par.top.expr = (customTopExpr(shortcut, column) if custom
+			if not hasattr(top.par, sourcePar):
+				raise ValueError('deviceTypes row "{}" says the source parameter is '
+					'"{}", which {} does not have'.format(
+						spec['type'], sourcePar, spec['selectop']))
+			top.par[sourcePar].expr = (customTopExpr(shortcut, column) if custom
 				else cameraTopExpr(shortcut, spec['cameraop_name']))
 			if image:
 				top.par.image = image
