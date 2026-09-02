@@ -1,11 +1,11 @@
 """
-End to end test of Calibrate / Refine / RebuildChain INSIDE TouchDesigner,
-with no camera attached.
+Test Calibrate, Refine and RebuildChain INSIDE TouchDesigner, with no camera
+attached.
 
-Builds a harness that presents the same interface the real component does
-(Device<n> COMPs each holding a null_sourcePointcloud TOP and a transformMatrix
-table), fills the TOPs with synthetic clouds related by a known 4x4, then drives
-the real extension and checks the recovered matrix.
+Builds a stand in that looks to the extension like the real component (a
+Device<n> COMP each, holding a cloud and a transformMatrix table), fills it
+with made up clouds a known 4x4 apart, then runs the real extension and checks
+the matrix that comes back.
 
 Run from TD:  exec(open(r'<this file>', encoding='utf-8').read())
 """
@@ -56,7 +56,7 @@ def scene(seed=0):
 
 
 def asImage(points):
-	"""Pack an Nx3 cloud into a WxH RGBA float32 image, padded with invalid zeros."""
+	"""Pack a cloud into an image, padded with zeros that count as no point."""
 	flat = np.zeros((H * W, 4), dtype=np.float32)
 	n = min(len(points), H * W)
 	flat[:n, :3] = points[:n]
@@ -104,8 +104,8 @@ c1 = full[full[:, 0] > -1.10] + rng.normal(scale=.003, size=full[full[:, 0] > -1
 c2 = full[full[:, 0] < 1.10] + rng.normal(scale=.003, size=full[full[:, 0] < 1.10].shape)
 c3 = full[full[:, 2] < 1.10] + rng.normal(scale=.003, size=full[full[:, 2] < 1.10].shape)
 
-# Device1 sees the scene already in the reference frame; Device2's cloud is the
-# same scene expressed in its own frame, i.e. TRUE12 maps device2 -> device1.
+# Device1 already sees the scene in the reference space. Device2 sees the same
+# scene in its own space, so TRUE12 is what moves device 2 onto device 1.
 clouds = {
 	1: (TRUE12[:3, :3] @ c1.T).T + TRUE12[:3, 3],
 	2: c2,
@@ -115,9 +115,9 @@ clouds = {
 for index, points in clouds.items():
 	dev = rig.create(baseCOMP, 'Device{}'.format(index))
 	dev.nodeX, dev.nodeY = 0, -200 * index
-	top = dev.create(scriptTOP, 'null_sourcePointcloud')
+	top = dev.create(scriptTOP, 'cloud_source')
 	top.par.format = 'rgba32float'
-	cb = dev.create(textDAT, 'null_sourcePointcloud_callbacks')
+	cb = dev.create(textDAT, 'cloud_source_callbacks')
 	cb.text = ('def onCook(scriptOp):\n'
 		'\tarr = scriptOp.fetch("cloud", None)\n'
 		'\tif arr is not None:\n'
@@ -126,6 +126,34 @@ for index, points in clouds.items():
 	top.par.callbacks = cb
 	top.store('cloud', asImage(points))
 	top.cook(force=True)
+
+	# Built the same way a real device is: the image becomes points, the padding
+	# pixels are dropped, and what the extension reads is a POP.
+	conv = dev.create(toptoPOP, 'pop_convert')
+	conv.cook(force=True)
+	conv.par.rgba = 'custom'
+	conv.par.surftype = 'points'
+	conv.seq.attr.numBlocks = 1
+	conv.cook(force=True)
+	conv.par.attr0name = 'custom'
+	conv.par.attr0customname = 'valid'
+	conv.par.attr0type = 'float'
+	conv.par.attr0numcomps = '1'
+	conv.seq.input.numBlocks = 2
+	conv.cook(force=True)
+	conv.par.input0top, conv.par.input0chanscope, conv.par.input0attrscope = (
+		'cloud_source', 'r g b', 'P')
+	conv.par.input1top, conv.par.input1chanscope, conv.par.input1attrscope = (
+		'cloud_source', 'a', 'valid.x')
+	keep = dev.create(deletePOP, 'pop_valid')
+	keep.inputConnectors[0].connect(conv)
+	keep.cook(force=True)
+	keep.par.entity, keep.par.invert = 'point', 'keep'
+	keep.par.attr0inattr, keep.par.attr0func, keep.par.attr0value = 'valid.x', 'gte', 0.5
+	cloud = dev.create(nullPOP, 'null_sourcePointcloud')
+	cloud.inputConnectors[0].connect(keep)
+	cloud.cook(force=True)
+
 	t = dev.create(tableDAT, 'transformMatrix')
 	t.clear()
 
@@ -134,8 +162,8 @@ rig.par.ext0object.val = "op('./extTDXDepthCamMerger').module.extTDXDepthCamMerg
 rig.par.ext0promote = True
 rig.par.reinitextensions.pulse()
 
-# Stash the ground truth so a follow up script can grade a run without rebuilding
-# the scene or duplicating the maths. td_test_devicesources.py reads these.
+# Keep the right answers on the rig, so the next script can mark a run without
+# rebuilding the scene. td_test_devicesources.py reads them.
 rig.store('TRUE12', TRUE12)
 rig.store('TRUE23', TRUE23)
 

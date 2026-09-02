@@ -7,19 +7,17 @@
 	info@darienbrito.com
 	https://www.darienbrito.com
 
-	Registers point clouds from several depth cameras into one coordinate space.
-	The registration itself is Open3D's; all credit for those algorithms goes to
-	its authors. http://www.open3d.org/
+	Lines up the point clouds of several depth cameras into one shared space.
+	The registration maths is Open3D's, all credit for it goes to its authors.
+	http://www.open3d.org/
 
-	Open3D is NOT imported here. Importing it inside TouchDesigner hard-crashes
-	the process, because Open3D ships its own OpenMP/TBB alongside the ones
-	TouchDesigner already loaded. Instead the maths runs in a separate python
-	process (see the workerSource DAT) and only a 4x4 matrix comes back. That
-	also means this component does not care which python TouchDesigner itself
-	uses, so it works on builds whose python has no Open3D wheel at all.
+	Open3D is never imported here: loading it inside TouchDesigner crashes the
+	app. It runs in a separate python instead (see the workerSource DAT) and
+	sends back a 4x4 matrix. So this component does not care which python
+	TouchDesigner itself uses.
 
-	Convention throughout: pair = [target, source]. The target is the reference
-	and does not move; the source is the cloud transformed onto it.
+	Everywhere below a pair is [target, source]. The target stays where it is,
+	the source is the cloud moved onto it.
 """
 
 import hashlib
@@ -30,27 +28,34 @@ import tempfile
 
 import numpy as np
 
+# Also defined in extUtilities: the two DATs are separate modules inside TD
+# and cannot import each other.
 DEVICE_PREFIX = 'Device'
 WORKER_TIMEOUT = 900
 
-MATRIX_COLUMNS = ['m{}{}'.format(r, c) for r in range(4) for c in range(4)]
+MATRIX_COLUMNS = [f'm{r}{c}' for r in range(4) for c in range(4)]
 CALIBRATION_COLUMNS = ['device', 'parent', 'method', 'fitness', 'rmse',
 	'correspondences', 'status'] + MATRIX_COLUMNS
+
+
+def deviceName(index):
+	"""The COMP name for a device index: Device1, Device2, ..."""
+	return f'{DEVICE_PREFIX}{int(index)}'
 
 
 # ________________________________________________________________ pure maths
 
 
 def matrixFromValues(values):
-	"""16 values in row major order into a 4x4."""
+	"""16 numbers, read row by row, into a 4x4."""
 	numbers = [float(v) for v in values]
 	if len(numbers) != 16:
-		raise ValueError('expected 16 matrix values, got {}'.format(len(numbers)))
+		raise ValueError(f'expected 16 matrix values, got {len(numbers)}')
 	return np.array(numbers, dtype=np.float64).reshape(4, 4)
 
 
 def looksRigid(matrix, tolerance=0.1):
-	"""Cheap sanity check on a matrix a user typed or pasted in."""
+	"""Quick check that a typed in matrix is only a move and a turn."""
 	bottom = np.allclose(matrix[3], [0.0, 0.0, 0.0, 1.0], atol=1e-4)
 	scale = abs(abs(np.linalg.det(matrix[:3, :3])) - 1.0) < tolerance
 	return bool(bottom and scale)
@@ -58,16 +63,13 @@ def looksRigid(matrix, tolerance=0.1):
 
 def composeChain(links, reference=1):
 	"""
-	Compose pairwise transforms into the reference device's frame.
+	Turn camera to camera transforms into transforms onto one reference camera.
 
-	links: {device: (parent, matrix)}, matrix mapping that device's frame into
-	its parent's frame. Returns {device: matrix} into the reference frame.
+	links: {device: (parent, matrix)}, where matrix moves that device into its
+	parent's space. Returns {device: matrix} into the reference space.
 
-	Order is load bearing. Open3D returns T with x_target = T @ x_source, so the
-	parent's composed matrix multiplies on the LEFT of the child's pairwise one.
-	The other way round applies the parent's motion in the child's frame, which
-	is the bug this replaces: before, each device applied only its own pairwise
-	matrix, so anything past the second camera landed in the wrong place.
+	The parent's matrix goes on the LEFT of the child's. The other way round
+	applies the parent's motion in the child's space, which is wrong.
 	"""
 	reference = int(reference)
 	composed = {reference: np.eye(4)}
@@ -77,10 +79,10 @@ def composeChain(links, reference=1):
 		if device in composed:
 			return composed[device]
 		if device in seen:
-			raise ValueError('device chain loops back on device {}'.format(device))
+			raise ValueError(f'device chain loops back on device {device}')
 		if device not in links:
 			raise ValueError(
-				'device {} has no calibration and is not the reference'.format(device))
+				f'device {device} has no calibration and is not the reference')
 		seen.add(device)
 		parent, matrix = links[device]
 		composed[device] = resolve(parent, seen) @ np.asarray(matrix, dtype=np.float64)
@@ -95,7 +97,7 @@ def composeChain(links, reference=1):
 
 
 class extTDXDepthCamMerger:
-	"""Multi camera point cloud registration for TouchDesigner."""
+	"""Lines up point clouds from several depth cameras."""
 
 	def __init__(self, ownerComp):
 		self.ownerComp = ownerComp
@@ -113,16 +115,16 @@ class extTDXDepthCamMerger:
 
 	def workerPath(self):
 		"""
-		Materialise the embedded worker source as a real .py so a separate
-		interpreter can run it. Named by content hash, so editing the DAT
-		produces a new file and stale copies are never reused.
+		Write the worker DAT out as a real .py file so another python can run
+		it. The file name holds a hash of the text, so an edited DAT gets a new
+		file and an old one is never reused.
 		"""
 		dat = self.ownerComp.op('workerSource')
 		if dat is None:
-			raise ValueError('no workerSource DAT in {}'.format(self.ownerComp.path))
+			raise ValueError(f'no workerSource DAT in {self.ownerComp.path}')
 		source = dat.text
 		digest = hashlib.sha1(source.encode('utf-8')).hexdigest()[:12]
-		path = os.path.join(self.workDir(), 'worker_{}.py'.format(digest))
+		path = os.path.join(self.workDir(), f'worker_{digest}.py')
 		if not os.path.isfile(path):
 			with open(path, 'w', encoding='utf-8', newline='\n') as handle:
 				handle.write(source)
@@ -135,7 +137,7 @@ class extTDXDepthCamMerger:
 				'Python exe is not set. Point it at a python.exe (3.11 or newer) '
 				'that has open3d installed, then pulse Check worker.')
 		if not os.path.isfile(exe):
-			raise ValueError('Python exe does not exist: {}'.format(exe))
+			raise ValueError(f'Python exe does not exist: {exe}')
 		return exe
 
 	def resultPath(self):
@@ -143,13 +145,10 @@ class extTDXDepthCamMerger:
 
 	def runWorker(self, args, timeout=WORKER_TIMEOUT, resultPath=None):
 		"""
-		Run the worker and return its parsed JSON. Raises on any failure.
+		Run the worker and return its JSON reply. Raises on any failure.
 
-		The worker writes its reply to resultPath as well as printing it. Prefer
-		the file: open3d writes to stdout of its own accord, and picking the
-		reply back out of a stream by trying json.loads on every line is the
-		weaker of the two. The file is removed first, so a worker that dies
-		before writing cannot hand back the previous run's answer.
+		The result file is deleted before the run, so a worker that dies
+		cannot hand back the previous run's answer.
 		"""
 		if resultPath and os.path.isfile(resultPath):
 			os.remove(resultPath)
@@ -158,8 +157,23 @@ class extTDXDepthCamMerger:
 			proc = subprocess.run(command, capture_output=True, text=True,
 				timeout=timeout, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
 		except subprocess.TimeoutExpired:
-			raise RuntimeError('worker timed out after {}s'.format(timeout))
+			raise RuntimeError(f'worker timed out after {timeout}s')
 
+		payload = self.workerReply(proc, resultPath)
+		if payload is None:
+			raise RuntimeError('worker produced no result.\nstdout: {}\nstderr: {}'.format(
+				(proc.stdout or '')[-500:], (proc.stderr or '')[-500:]))
+		if not payload.get('ok'):
+			raise RuntimeError('worker failed: {}'.format(payload.get('error')))
+		return payload
+
+	def workerReply(self, proc, resultPath):
+		"""
+		The worker's parsed JSON reply, or None when it left none.
+
+		The reply is read from a file rather than from what the worker
+		printed, because open3d prints to stdout as well.
+		"""
 		payload = None
 		if resultPath and os.path.isfile(resultPath):
 			try:
@@ -168,66 +182,57 @@ class extTDXDepthCamMerger:
 			except ValueError:
 				payload = None
 		if payload is None:
-			# --probe writes no file, and a worker killed mid-write leaves none.
+			# No file to read: --probe writes none, and a worker that died may
+			# not have got that far. Take the last line it printed instead.
 			for line in reversed((proc.stdout or '').strip().splitlines()):
 				try:
 					payload = json.loads(line)
 					break
 				except ValueError:
 					continue
-		if payload is None:
-			raise RuntimeError('worker produced no result.\nstdout: {}\nstderr: {}'.format(
-				(proc.stdout or '')[-500:], (proc.stderr or '')[-500:]))
-		if not payload.get('ok'):
-			raise RuntimeError('worker failed: {}'.format(payload.get('error')))
 		return payload
 
+	def findDevice(self, index):
+		"""The device COMP for this index, or None when it does not exist."""
+		return self.ownerComp.op(deviceName(index))
+
 	def device(self, index):
-		comp = self.ownerComp.op('{}{}'.format(DEVICE_PREFIX, int(index)))
+		comp = self.findDevice(index)
 		if comp is None:
-			raise ValueError('no {}{} inside {}'.format(
-				DEVICE_PREFIX, int(index), self.ownerComp.path))
+			raise ValueError(f'no {deviceName(index)} inside {self.ownerComp.path}')
 		return comp
 
 	def dumpCloud(self, index, withColors, tag):
 		"""
-		Pull a device's cloud off the GPU and write it where the worker can read
-		it. Points go out unfiltered; the worker drops the invalid ones so that
-		points and colours are masked identically in one place.
+		Copy a device's cloud off the GPU into files the worker can read.
 
-		numpyArray() returns the image vertically flipped. That only permutes the
-		order of an unordered point set and both clouds are read the same way, so
-		the registration is unaffected. Do not "fix" it.
+		The cloud is taken before the transform and before Show, so a hidden
+		device can still be calibrated. Pixels the camera never returned are
+		already gone, and every colour sits on the point it belongs to.
 		"""
 		comp = self.device(index)
-		top = comp.op('null_sourcePointcloud')
-		if top is None:
-			raise ValueError('{} has no null_sourcePointcloud'.format(comp.path))
+		pop = comp.op('null_sourcePointcloud')
+		if pop is None:
+			raise ValueError(f'{comp.path} has no null_sourcePointcloud')
+		if not pop.numPoints():
+			raise ValueError(f'{pop.path} has no points. Either its source resolves '
+				'to nothing, or the mask threw everything away.')
 
-		array = top.numpyArray()
-		points = array.reshape(-1, array.shape[-1])[:, :3].astype(np.float32)
-		pointPath = os.path.join(self.workDir(), '{}_points.npy'.format(tag))
+		points = np.array(list(pop.points('P')), dtype=np.float32)
+		pointPath = os.path.join(self.workDir(), f'{tag}_points.npy')
 		np.save(pointPath, points)
 
 		colorPath = None
 		if withColors:
-			colorTop = comp.op('null_color')
-			if colorTop is None:
-				raise ValueError(
-					'{} has no null_color, which coloured ICP needs'.format(comp.path))
-			# Reachable with device type "custom": a customSources row may leave
-			# the colour cell empty, which leaves null_color with no input and
-			# zero resolution. Say so here rather than shipping a bad array.
-			if not (colorTop.width and colorTop.height):
-				raise ValueError('{} resolves to no colour image, which coloured ICP '
-					'needs. Give this device a colour source or turn off '
-					'Usecoloricp.'.format(colorTop.path))
-			colors = colorTop.numpyArray()
-			colors = colors.reshape(-1, colors.shape[-1])[:, :3]
-			if colors.dtype == np.uint8:
-				colors = colors.astype(np.float32) / 255.0
-			colorPath = os.path.join(self.workDir(), '{}_colors.npy'.format(tag))
-			np.save(colorPath, colors.astype(np.float32))
+			# A "custom" device may have no colour source, and its points then
+			# carry a default colour. Say so rather than matching flat grey.
+			if 'Color' not in [a.name for a in pop.pointAttributes]:
+				raise ValueError(f'{pop.path} carries no Color attribute, which '
+					'coloured ICP needs. Give this device a colour source or turn '
+					'off Usecoloricp.')
+			colors = np.array(list(pop.points('Color')), dtype=np.float32)[:, :3]
+			colorPath = os.path.join(self.workDir(), f'{tag}_colors.npy')
+			np.save(colorPath, colors)
 		return pointPath, colorPath
 
 	def buildJob(self, pair, mode, init=None):
@@ -257,7 +262,7 @@ class extTDXDepthCamMerger:
 	def calibrationTable(self):
 		table = self.ownerComp.op('calibrationData')
 		if table is None:
-			raise ValueError('no calibrationData table in {}'.format(self.ownerComp.path))
+			raise ValueError(f'no calibrationData table in {self.ownerComp.path}')
 		if table.numRows == 0 or [c.val for c in table.row(0)] != CALIBRATION_COLUMNS:
 			table.clear()
 			table.appendRow(CALIBRATION_COLUMNS)
@@ -279,7 +284,7 @@ class extTDXDepthCamMerger:
 				table[existing[0].row, index] = value
 
 	def readLinks(self):
-		"""{device: (parent, matrix)} from the calibration store."""
+		"""{device: (parent, matrix)} read out of the calibration table."""
 		table = self.calibrationTable()
 		links = {}
 		for index in range(1, table.numRows):
@@ -290,29 +295,57 @@ class extTDXDepthCamMerger:
 		return links
 
 	def writeMatrix(self, table, matrix):
-		"""
-		Write a 4x4 as four rows. Verified in TD 2025.33070: the GLSL matrix
-		uniform reads a table DAT row-major, so this is the layout the shader
-		expects. A +1 X translation written this way translates the cloud by 1 m.
-		"""
+		"""Write a 4x4 as four table rows, the layout the transform POP reads."""
 		table.clear()
 		for row in np.asarray(matrix, dtype=np.float64):
 			table.appendRow([repr(float(v)) for v in row])
+
+	def matrixFromDat(self):
+		"""
+		Use a 4x4 made elsewhere (CloudCompare, OpenCV, a hand alignment) from a
+		table DAT as this pair's transform.
+		"""
+		table = self.par('Presetmatrixdat', None)
+		if table is None:
+			raise ValueError('Preset matrix DAT is not set')
+		if table.numRows != 4 or table.numCols != 4:
+			raise ValueError(f'{table.path} is {table.numRows}x{table.numCols}, '
+				'expected a 4x4')
+		try:
+			matrix = matrixFromValues([c.val for row in table.rows() for c in row])
+		except ValueError as err:
+			raise ValueError(f'{table.path}: {err}')
+
+		status = 'OK' if looksRigid(matrix) else 'WARN'
+		if status == 'WARN':
+			print(f'[TDXMerger] {table.path} does not look like a rigid transform '
+				'(bottom row or determinant is off)')
+		return matrix, {'stage': 'table', 'fitness': 1.0, 'rmse': 0.0,
+			'correspondences': 0, 'status': status}
 
 	def report(self, result):
 		self.ownerComp.par.Lastfitness = '{:.4f}'.format(result.get('fitness', 0.0))
 		self.ownerComp.par.Lastrmse = '{:.5f}'.format(result.get('rmse', 0.0))
 		self.ownerComp.par.Lastcorrespondences = int(result.get('correspondences', 0))
-		message = '{}: {} fitness {:.3f}, rmse {:.4f} m over {} points'.format(
+		parts = ['{}: {} fitness {:.3f}, rmse {:.4f} m over {} points'.format(
 			result.get('status', '?'), result.get('stage', '?'),
 			result.get('fitness', 0.0), result.get('rmse', 0.0),
-			result.get('correspondences', 0))
+			result.get('correspondences', 0))]
 		first = result.get('global')
 		if first:
-			message += '   (global stage: fitness {:.3f}, rmse {:.4f} m)'.format(
-				first.get('fitness', 0.0), first.get('rmse', 0.0))
+			parts.append('(global stage: fitness {:.3f}, rmse {:.4f} m)'.format(
+				first.get('fitness', 0.0), first.get('rmse', 0.0)))
+		# Fitness only says the solver settled. Whether repeated tries landed in
+		# the same place is what tracks a right answer, so it goes in the line
+		# the user reads.
+		if not result.get('agreed', True):
+			parts.append('UNSTABLE: repeated runs landed {:.2f} m apart, so check '
+				'the viewport before trusting this'.format(result.get('consensus', 0.0)))
+		message = '   '.join(parts)
 		self.ownerComp.par.Laststatus = message
-		print('[TDXMerger] {}'.format(message))
+		print(f'[TDXMerger] {message}')
+		# No popup for an unstable result. It fires often enough that people
+		# would learn to click it away, so the status line carries it instead.
 		if result.get('status') == 'FAIL':
 			ui.messageBox('Calibration failed', (
 				'{}\n\nThe matrix was still written so you can inspect it, but the '
@@ -322,32 +355,36 @@ class extTDXDepthCamMerger:
 	# ____ Public ____
 
 	def CheckWorker(self):
-		"""Verify the external interpreter can actually run the registration."""
+		"""Check that the outside python can really run the registration."""
 		try:
 			info = self.runWorker(['--probe'], timeout=120)
 		except Exception as err:
-			self.ownerComp.par.Open3dstatus = 'FAILED: {}'.format(err)
-			print('[TDXMerger] {}'.format(err))
+			self.ownerComp.par.Open3dstatus = f'FAILED: {err}'
+			self.ownerComp.par.Open3dversion = ''
+			self.ownerComp.par.Pythonversion = ''
+			print(f'[TDXMerger] {err}')
 			return False
-		self.ownerComp.par.Open3dstatus = 'OK: open3d {} on python {} (numpy {})'.format(
-			info.get('open3d'), info.get('python'), info.get('numpy'))
+		# The status field is the verdict, the versions sit beside it. numpy only
+		# matters when something is broken, so it goes to the console.
+		self.ownerComp.par.Open3dstatus = 'OK'
 		self.ownerComp.par.Open3dversion = str(info.get('open3d') or '')
 		self.ownerComp.par.Pythonversion = str(info.get('python') or '')
+		print('[TDXMerger] worker OK: open3d {} on python {} (numpy {})'.format(
+			info.get('open3d'), info.get('python'), info.get('numpy')))
 		return True
 
 	def Calibrate(self, pair=(1, 2), mode='globalRegistration'):
 		"""
-		Estimate the transform bringing the source cloud onto the target.
+		Work out the transform that puts the source cloud onto the target.
 
-		mode 'globalThenIcp' chains RANSAC into ICP inside one worker run, which
-		is what calibrating from scratch actually wants: it costs one process
-		start and one readback of each cloud instead of two. 'globalRegistration'
-		keeps the global stage on its own for anyone who wants to look at it
-		before refining.
+		Mode 'globalThenIcp' does the rough match and the refine in one worker
+		run, which is what calibrating from scratch wants: one process start and
+		one read of each cloud. 'globalRegistration' stops after the rough match
+		so you can look at it before refining.
 		"""
 		target, source = int(pair[0]), int(pair[1])
 		if target == source:
-			raise ValueError('target and source are both device {}'.format(target))
+			raise ValueError(f'target and source are both device {target}')
 
 		if mode == 'table':
 			matrix, result = self.matrixFromDat()
@@ -364,19 +401,19 @@ class extTDXDepthCamMerger:
 
 	def Refine(self, pair=(1, 2)):
 		"""
-		Polish an existing calibration with ICP. Never silently falls back to a
-		fresh global registration: Refine means improve what is already there.
+		Improve an existing calibration with ICP. It never starts a fresh rough
+		match on its own: Refine only polishes what is already there.
 		"""
 		target, source = int(pair[0]), int(pair[1])
 		links = self.readLinks()
 		if source not in links:
 			raise ValueError(
-				'no calibration stored for device {}. Run Calibrate first.'.format(source))
+				f'no calibration stored for device {source}. Run Calibrate first.')
 		parent, matrix = links[source]
 		if parent != target:
 			raise ValueError(
-				'device {} is calibrated against device {}, not {}. Recalibrate, or '
-				'set the pair to ({}, {}).'.format(source, parent, target, parent, source))
+				f'device {source} is calibrated against device {parent}, not '
+				f'{target}. Recalibrate, or set the pair to ({parent}, {source}).')
 
 		result = self.runWorker([self.buildJob((target, source), 'icp', init=matrix)],
 			resultPath=self.resultPath())
@@ -388,13 +425,15 @@ class extTDXDepthCamMerger:
 
 	def RebuildChain(self):
 		"""
-		Recompose every device's transform into the reference frame and push the
-		result to the tables the GPU reads. Cheap enough to redo in full.
+		Redo every device's transform onto the reference camera and write them
+		to the tables the GPU reads. Cheap enough to redo in full.
 		"""
 		reference = int(self.par('Referencedevice', 1))
 		composed = composeChain(self.readLinks(), reference)
 		for index in range(1, int(self.par('Numberofdevices', 1)) + 1):
-			comp = self.ownerComp.op('{}{}'.format(DEVICE_PREFIX, index))
+			# findDevice, not device(): a partly built rig is fine here, a
+			# missing COMP is simply skipped.
+			comp = self.findDevice(index)
 			if comp is None:
 				continue
 			table = comp.op('transformMatrix')
@@ -403,31 +442,8 @@ class extTDXDepthCamMerger:
 		return composed
 
 	def ResetCalibration(self):
-		"""Forget every stored calibration and put all devices back at identity."""
+		"""Forget every calibration and leave all devices untransformed."""
 		table = self.calibrationTable()
 		table.clear()
 		table.appendRow(CALIBRATION_COLUMNS)
 		self.RebuildChain()
-
-	def matrixFromDat(self):
-		"""
-		Take a 4x4 produced elsewhere (CloudCompare, OpenCV, a manual alignment)
-		from a table DAT and use it as the pairwise matrix.
-		"""
-		table = self.par('Presetmatrixdat', None)
-		if table is None:
-			raise ValueError('Preset matrix DAT is not set')
-		if table.numRows != 4 or table.numCols != 4:
-			raise ValueError('{} is {}x{}, expected a 4x4'.format(
-				table.path, table.numRows, table.numCols))
-		try:
-			matrix = matrixFromValues([c.val for row in table.rows() for c in row])
-		except ValueError as err:
-			raise ValueError('{}: {}'.format(table.path, err))
-
-		status = 'OK' if looksRigid(matrix) else 'WARN'
-		if status == 'WARN':
-			print('[TDXMerger] {} does not look like a rigid transform '
-				'(bottom row or determinant is off)'.format(table.path))
-		return matrix, {'stage': 'table', 'fitness': 1.0, 'rmse': 0.0,
-			'correspondences': 0, 'status': status}

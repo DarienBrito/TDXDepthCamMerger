@@ -1,10 +1,9 @@
 """
-Compare the DATs inside the built component against the repo sources they were
-installed from.
+Compare the DATs inside the built component with the repo files they came from.
 
-td_build.py only ever copies file -> DAT. A DAT edited inside TouchDesigner is
-therefore silently reverted by the next build, and the repo keeps shipping the
-old text. Run this before saving, or before trusting a build.
+td_build.py only ever copies file -> DAT, so a DAT edited inside TouchDesigner
+is quietly overwritten by the next build while the repo keeps the old text. Run
+this before saving, or before trusting a build.
 
 Run from TD:  exec(open(r'<this file>', encoding='utf-8').read())
 """
@@ -38,8 +37,8 @@ for datPath, fileName in PAIRS:
 		drifted.append(datPath)
 		print('  [MISSING FILE] {}'.format(path))
 		continue
-	# splitlines absorbs a trailing newline and any CRLF the DAT picked up, so
-	# only real content differences show up.
+	# Comparing line by line hides a trailing newline and any line ending the
+	# DAT picked up, so only real changes show up.
 	onDisk = open(path, encoding='utf-8').read().splitlines()
 	inTd = dat.text.splitlines()
 	if onDisk == inTd:

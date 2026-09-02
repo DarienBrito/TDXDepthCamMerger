@@ -1,14 +1,14 @@
 """
-	Per device helpers for TDXDepthCamMerger.
+	Small helpers that live inside one camera's COMP.
 
-	Nothing here is needed for registration; the merge works without it.
+	Registration does not use any of this.
 """
 
 
 class extDevice:
-	"""Helpers local to one camera's COMP."""
+	"""Helpers for one camera."""
 
-	# Order matches the Kinect Azure TOP's intrinsics tuples.
+	# The order the Kinect TOP lists its lens values in.
 	INTRINSICS = ['cx', 'cy', 'fx', 'fy', 'k1', 'k2', 'k3', 'k4', 'k5', 'k6',
 		'codx', 'cody', 'p2', 'p1']
 
@@ -16,10 +16,7 @@ class extDevice:
 		self.ownerComp = ownerComp
 
 	def cameraTop(self):
-		"""
-		The camera TOP this device reads from. Resolved through whichever select
-		TOP is present, so it survives the device type changing underneath.
-		"""
+		"""The camera TOP this device reads from, found through its select TOPs."""
 		for name in ('in_pointcloud', 'in_color'):
 			select = self.ownerComp.op(name)
 			if select is not None and hasattr(select.par, 'top'):
@@ -28,11 +25,10 @@ class extDevice:
 
 	def GetIntrinsics(self):
 		"""
-		Depth and colour camera intrinsics as a dict, or None.
+		Lens values for the depth and colour cameras as a dict, or None.
 
-		Only the Kinect Azure TOP publishes these. The Orbbec TOP does not, so
-		this reports and returns None there rather than raising, and no caller
-		should depend on it.
+		Only the Kinect reports them. Anything else prints a note and returns
+		None, so do not rely on this.
 		"""
 		camera = self.cameraTop()
 		if camera is None:

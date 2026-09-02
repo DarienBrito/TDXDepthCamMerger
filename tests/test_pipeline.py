@@ -1,10 +1,10 @@
 """
-Covers the TouchDesigner-side half of the extension: the pure numpy maths that
-runs inside TD. Ingestion and registration live in worker.py and are covered by
+Covers the TouchDesigner side of the extension: the numpy maths that runs
+inside TD. The registration itself lives in worker.py, tested by
 test_worker.py.
 
-This file must pass under ANY python 3.8+ with numpy, and importantly WITHOUT
-open3d installed, because that is the situation inside TouchDesigner.
+Must pass under any python 3.8+ with numpy and WITHOUT open3d installed, which
+is the situation inside TouchDesigner.
 
     python test_pipeline.py
 """
@@ -98,9 +98,8 @@ print('\nmatrix helpers')
 
 flat = list(M2.reshape(-1))
 check('matrixFromValues round trips row major', np.allclose(ext.matrixFromValues(flat), M2))
-# writeMatrix serialises cells as repr(float(v)). The float() cast is load
-# bearing: under numpy 2.x repr(np.float64(0.93)) is 'np.float64(0.93)', which
-# does not parse back. This asserts the exact round trip the component uses.
+# Table cells are written as repr(float(v)). The float() matters: the repr of a
+# numpy number reads 'np.float64(0.93)', which does not parse back.
 cells = [repr(float(v)) for v in flat]
 check('table cells round trip', np.allclose(ext.matrixFromValues(cells), M2))
 check('cells are plain numbers, not numpy reprs',

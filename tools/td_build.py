@@ -1,30 +1,30 @@
 """
-Build TDXDepthCamMerger 0.2.0 inside a live TouchDesigner 2025.33070.
+Build TDXDepthCamMerger 0.3.0 inside a running TouchDesigner 2025.33070.
 
 Run from TD (MCP execute_code):
 
     exec(open(r'<this file>', encoding='utf-8').read())
 
-Idempotent: destroys and rebuilds the component each time, so it can be re-run
-after a crash without hand work.
+Safe to run again and again: it destroys and rebuilds the component each time,
+so a crash needs no hand repair.
 
-Why a fresh container rather than loading the .tox directly: the 2023.12370
-container COMP's own saved state crashes TD 2025.33070 when it cooks. Its 145
-children are all fine, so we make a new container and copyOPs them in.
+Everything is copied into a FRESH container rather than loaded straight from
+the old .tox, whose saved container crashes this TD build when it cooks. Its
+children are all fine, so they are copied across.
 """
 
 import os
 
-# Anchored on the open project rather than a machine path. This file is run with
-# exec(open(...).read()), which defines no __file__, so project.folder is the only
-# handle on the repo. Set REPO before the exec to build from somewhere else.
+# Taken from the open project rather than a fixed path: this file is run with
+# exec(), which defines no __file__, so the project folder is the only handle on
+# the repo. Set REPO before the exec to build from somewhere else.
 REPO = globals().get('REPO') or project.folder.replace(os.sep, '/')
 SRC = REPO + '/src'
 BUILD = REPO + '/tools/build'
 TOX = BUILD + '/control.tox'
 
-# Fail loud rather than build the wrong thing: a wrong REPO used to install stale
-# sources silently.
+# Stop rather than build the wrong thing: a wrong REPO would quietly install
+# stale sources.
 if not os.path.isfile(SRC + '/worker.py'):
 	raise RuntimeError(
 		'no sources under {}. Open the project from the repo root, or set REPO '
@@ -36,7 +36,7 @@ SHORTCUT = 'TDXMerger'
 OLD_SHORTCUT = 'TDAzureMerger'
 PYEXE = os.environ.get('TDX_PYTHON_EXE') or 'D:/anaconda3/envs/td/python.exe'
 
-VERSION = '0.2.0'
+VERSION = '0.3.0'
 AUTHOR = 'Darien Brito'
 
 report = []
@@ -64,7 +64,8 @@ comp.par.parentshortcut = SHORTCUT
 comp.par.w, comp.par.h = 1920, 1080
 comp.par.hmode, comp.par.vmode = 'fill', 'fill'
 
-# copyOPs preserves connections among the copied set; copy() one at a time does not.
+# copyOPs keeps the wires between the copied operators; copying one at a time
+# drops them.
 comp.copyOPs(list(old.children))
 stage.destroy()
 note('copied {} descendants into the new container'.format(len(comp.findChildren(maxDepth=99))))
@@ -114,16 +115,14 @@ for t in touched:
 
 # ____________________________________________________ 4. custom parameters
 #
-# Declared here rather than replayed from the old custom_pars.json dump, which
-# is deleted: it shipped the original machine's Kinect serials as the defaults of
-# Devices and Ids, carried seven parameters 0.2.0 no longer has, and split one
-# page of state across a json file and forty lines of appends. Every runtime
-# parameter now starts empty and is filled by the extensions.
+# Written out here rather than replayed from a dump, so the shipped component
+# carries nothing from this machine. Every parameter filled in at runtime starts
+# empty and is written by the extensions.
 #
 # Each row is (name, label, kind, options).
 #   section  draws a divider above the parameter
-#   readOnly is display only, script still writes it
-# Reading order per page: what you set, then what you press, then what comes back.
+#   readOnly is display only, the script still writes it
+# Order on a page: what you set, then what you press, then what comes back.
 
 PAGES = (
 	('Setup', (
@@ -136,7 +135,12 @@ PAGES = (
 		('Devices', 'Devices', 'Str', {'readOnly': True}),
 		('Pythonexe', 'Python exe', 'File', {'val': PYEXE, 'section': True}),
 		('Checkworker', 'Check worker', 'Pulse', {}),
+		# Worker status says only OK, or what went wrong. The two versions get
+		# their own fields beside it, so they can be read at a glance and used
+		# in an expression.
 		('Open3dstatus', 'Worker status', 'Str', {'readOnly': True}),
+		('Open3dversion', 'Open3D version', 'Str', {'readOnly': True}),
+		('Pythonversion', 'Python version', 'Str', {'readOnly': True}),
 	)),
 	('Calibrate', (
 		('Referencedevice', 'Reference device', 'Int', {'val': 1}),
@@ -152,8 +156,8 @@ PAGES = (
 		('Lastcorrespondences', 'Last correspondences', 'Int', {'readOnly': True}),
 	)),
 	('Registration', (
-		# Chained is the default: calibrating from scratch wants both stages, and
-		# doing them in one worker run costs one process start instead of two.
+		# Both stages at once is the default: calibrating from scratch wants
+		# both, and one run starts one process instead of two.
 		('Mode', 'Mode', 'Menu', {
 			'val': 'globalThenIcp',
 			'menuNames': ('globalThenIcp', 'globalRegistration', 'table'),
@@ -174,8 +178,6 @@ PAGES = (
 		('Author', 'Author', 'Str', {'val': AUTHOR, 'readOnly': True,
 			'section': True}),
 		('Version', 'Version', 'Str', {'val': VERSION, 'readOnly': True}),
-		('Open3dversion', 'Open3D version', 'Str', {'readOnly': True}),
-		('Pythonversion', 'Python version', 'Str', {'readOnly': True}),
 	)),
 )
 
@@ -246,9 +248,8 @@ def installDat(name, path, x, y, language='python'):
 	return dat
 
 
-# control.tox still carries the root extension under its 0.0.3 name. Before the
-# rename the install landed on that DAT and overwrote it; now it would survive
-# as a duplicate and push the descendant count to 138.
+# control.tox carries the root extension under an older name. Destroy it, or it
+# stays behind as a duplicate.
 legacy = comp.op('extTDAzureMerger')
 if legacy is not None:
 	legacy.destroy()
@@ -260,14 +261,14 @@ installDat('workerSource', SRC + '/worker.py', -900, -40)
 note('installed extension, utilities and worker source from {}'.format(SRC))
 note('python exe: {}'.format(PYEXE))
 
-comp.op('parexec1').text = '''# Routes every root parameter pulse: the work goes to the extensions, the three
-# About pulses go to the system browser. There is no webrender TOP in the
-# component, so opening a link starts no CEF process inside TouchDesigner.
+comp.op('parexec1').text = '''# Handles every parameter on the component: the work goes to the extensions, the
+# three About buttons open a link in the system browser. Nothing here loads a
+# web page inside TouchDesigner.
 
 import webbrowser
 
 LINKS = {
-	'Readme': 'https://github.com/DarienBrito/TDAzureMerger',
+	'Readme': 'https://github.com/DarienBrito/TDXDepthCamMerger',
 	'Support': 'https://www.patreon.com/c/darienbrito',
 	'Website': 'https://www.darienbrito.com',
 }
@@ -278,9 +279,11 @@ def onValueChange(par, prev):
 	if par.name in ('Specifypair1', 'Specifypair2', 'Devices'):
 		comp.SetIds()
 	elif par.name == 'Devicetype':
-		# Retype the template right away rather than leaving Kinect selects in
-		# place until the next Gather devices pulse.
-		comp.BuildDeviceSources()
+		# Rebuild the template straight away rather than leaving the old camera
+		# selects in place until the next Gather devices pulse. RebuildDevices,
+		# not BuildDeviceSources: rebuilding destroys the template's operators,
+		# and every clone has to be copied again afterwards.
+		comp.RebuildDevices()
 	return
 
 
@@ -310,8 +313,8 @@ comp.op('parexec1').par.pars = '*'
 
 # ____________________________________________________ 6. extensions
 
-# The Extension Object parameter holds python CODE AS A CONSTANT STRING.
-# Setting it as an expression silently fails to bind.
+# The Extension Object parameter holds python code as a plain string. Set as an
+# expression it binds nothing and says nothing.
 comp.par.ext0object.mode = ParMode.CONSTANT
 comp.par.ext0object.val = "op('./extTDXDepthCamMerger').module.extTDXDepthCamMerger(me)"
 comp.par.ext0promote = True
@@ -326,8 +329,8 @@ comp.par.reinitextensions.pulse()
 
 device = comp.op('Device1')
 
-# The blanket Azure -> Device rename above also rewrote this device's extension
-# reference, so the DAT and its class have to follow.
+# The rename above also rewrote this device's extension reference, so the DAT
+# and its class follow.
 azure = device.op('extAzure')
 if azure:
 	azure.destroy()
@@ -347,108 +350,71 @@ if hasattr(device.par, 'Useplayer'):
 	device.par.Useplayer.expr = 'parent().par.Usemaskforcalibration'
 note('rebuilt Device1 extension as extDevice')
 
-# The 4th channel of the point cloud TOP is alpha/validity, NOT a homogeneous w.
-# Measured in 2025.33070: feeding it as w made alpha 0.5 shift X by -0.50 instead
-# of +1.00, and alpha 0 collapsed the whole cloud onto the origin.
-device.op('glsl2_pixel').text = '''// Applies this device's composed transform to its point cloud on the GPU.
-//
-// w MUST be 1.0. The 4th channel of a point cloud TOP is alpha/validity, not a
-// homogeneous coordinate; using it as w scales the translation column. Measured
-// in TD 2025.33070 with a +1.0 X translation: alpha 1.0 gave +1.00 (correct),
-// alpha 0.5 gave -0.50, alpha 0.0 collapsed everything onto the origin.
-
-uniform int uShow;
-uniform mat4 mTransformMatrix;
-
-out vec4 fragColor;
-
-void main()
-{
-\tivec2 xy = ivec2(gl_FragCoord.xy);
-\tvec4 texel = texelFetch(sTD2DInputs[0], xy, 0);
-
-\tvec3 position = (mTransformMatrix * vec4(texel.xyz, 1.0)).xyz;
-
-\t// Binary mask rather than multiplying by a possibly fractional alpha, so a
-\t// valid point is never partially scaled toward the origin.
-\tfloat keep = step(0.5, texel.a) * float(uShow);
-
-\tfragColor = TDOutputSwizzle(vec4(position * keep, texel.a * float(uShow)));
-}
-'''
-
-# The compute shader was TouchDesigner's untouched example: it writes solid
-# white into a compute output that nothing reads.
-device.op('glsl2').par.computedat = ''
+# No shader here. The calibration is applied by a transform POP reading the
+# transformMatrix table, and BuildDeviceSources destroys whatever the old chain
+# left behind.
 if device.op('glsl2_compute'):
 	device.op('glsl2_compute').destroy()
-note('fixed glsl2_pixel homogeneous w and uShow; removed the unused compute shader')
 
-# Build the source TOPs through the same code path the Gather devices pulse uses,
-# rather than inheriting the 0.0.3 hardcoded Kinect selects from the old tox.
-# Called on the module directly because bound extensions are only live next frame.
-utils = comp.op('extUtilities').module.extUtilities(comp)
+# Build the source TOPs and the point chain with the same code the Gather
+# devices pulse uses. Called on the module directly, because an extension
+# attached to a COMP only goes live on the next frame.
+utilsModule = comp.op('extUtilities').module
+utils = utilsModule.extUtilities(comp)
 built = utils.BuildDeviceSources(device)
 note('built device sources for "{}": {}'.format(
 	comp.par.Devicetype.eval(),
 	', '.join('{} ({})'.format(n, o.OPType) for n, o in sorted(built.items()))))
+note('device POP chain: {}'.format(' -> '.join(
+	'{} ({})'.format(n, device.op(n).OPType)
+	for n in utilsModule.POP_NAMES if device.op(n))))
 
 
 # _________________________________ 8. strip inherited dead weight, add outputs
 
 world = comp.op('World')
 
-# The DeviceCam frustums are shaded by phong1, which is why this component
-# carries a lightCOMP and an ambientlightCOMP. Dropping them for a constantMAT
-# or a wireframeMAT was tried and rendered worse: TD's camera gizmo is a dense
-# mesh, so unlit it collapses to a silhouette and in wireframe it turns to
-# scribble. The 32 operators inside light1 are TD's own gizmo geometry: one
-# file load at startup, nothing per frame. Keeping the lights.
-# 'World/*' swept all twelve World children into the light list; name the two.
+# The little camera shapes are shaded by phong1, which is why the component
+# carries a light and an ambient light. Unlit they turn into flat silhouettes.
+# The operators inside light1 are TD's own gizmo shapes: loaded once, nothing
+# per frame.
+# Name the two lights: a wildcard would sweep in every child of World.
 comp.op('render1').par.lights = 'World/light1 World/ambient1'
+
+# Put phong1 in the row with the two lights it works with, where it reads.
+world.op('phong1').nodeX, world.op('phong1').nodeY = 1125, 225
 
 stripped = []
 
-# The whole 'actions' baseCOMP goes: it held a Readme containerCOMP wrapping a
-# webrenderTOP left active (a CEF process per instance, on load) and a second
-# parameterexecuteDAT that only called webbrowser.open. The root parexec1 above
-# already sees every root parameter, so it routes the About links too.
+# The whole "actions" COMP goes: it held a web page that loaded a browser
+# process on startup, and a second parameter handler. parexec1 above already
+# sees every parameter, so it opens the About links too.
 if comp.op('actions'):
 	comp.op('actions').destroy()
 	stripped.append('actions (COMP, was a second parexec + a CEF Readme)')
 
-# The DeviceCam replicator counted rows in an opfindDAT that rescanned the
-# network every cook, to learn a number the component already knows.
+# Take the number of camera gizmos straight from the parameter, rather than
+# searching the network every cook for a number the component already knows.
 rep = world.op('replicator1')
 rep.par.template = ''
 rep.par.method = 'bynum'
 rep.par.numreplicants.expr = 'parent.{}.par.Numberofdevices'.format(SHORTCUT)
 rep.par.repsuffixstart = 1
-# replicator1_callbacks was a stub: onReplicate passed, and onRemoveReplicant
-# reimplemented the default. Verified in 2025.33070 that clones are still
-# created and destroyed correctly with the callbacks parameter empty.
+# Its callbacks DAT did nothing the default does not already do. Clones are
+# still made and removed correctly with the parameter left empty.
 rep.par.callbacks = ''
 for dead in ('opfind1', 'opfind1_callbacks', 'World/replicator1_callbacks'):
 	if comp.op(dead):
 		comp.op(dead).destroy()
 		stripped.append(dead)
 
-# infoDAT on glsl2, referenced by no parameter and no DAT. One per device.
-if device.op('glsl2_info'):
-	device.op('glsl2_info').destroy()
-	stripped.append('Device1/glsl2_info')
+# BuildDeviceSources above already clears out anything left over inside a
+# device, so there is nothing to strip per device here.
 
-# 'mtx' was a null DAT passing transformMatrix straight through to the shader's
-# matrix uniform. The uniform takes the table directly. One operator per device.
-if device.op('mtx'):
-	device.op('glsl2').par.matrix0value = 'transformMatrix'
-	device.op('mtx').destroy()
-	stripped.append('Device1/mtx (null DAT, uniform now reads transformMatrix)')
-
-# UI/Viz reached the render through a selectTOP holding an ABSOLUTE path
-# (/ProjectName/TDXDepthCamMerger/bg), which breaks the moment the .tox is
-# dropped into a project with any other root name. A panel's Background TOP
-# parameter resolves an operator across networks, so it points at bg itself.
+# UI/Viz reached the render through a select holding a full path from the root,
+# which breaks the moment the .tox is dropped into a project with another name.
+# A panel's Background TOP parameter finds an operator across networks, so it
+# points straight at bg.
 viz = comp.op('UI/Viz')
 if viz and viz.op('select2'):
 	viz.par.top.val = viz.relativePath(comp.op('bg'))
@@ -456,85 +422,85 @@ if viz and viz.op('select2'):
 		viz.op(dead).destroy()
 	stripped.append('UI/Viz/select2 + UI/Viz/bg (absolute path removed)')
 
-# Active duplicates Show, which is what actually reaches the shader as uShow.
-# Parentdevice was written by createDevices and read by nothing; the real parent
-# is the one recorded in calibrationData from the calibration pair.
+# Active did the same job as Show, which is what really gates the merged cloud.
+# Parentdevice was written and never read: the real parent is the one recorded
+# in calibrationData.
 for dead in ('Active', 'Parentdevice'):
 	par = getattr(device.par, dead, None)
 	if par is not None:
 		par.destroy()
 		stripped.append('Device1.{} (par)'.format(dead))
-note('stripped: {}'.format(', '.join(stripped) or 'nothing'))
 
-# Give the component real outputs. Until now the merged cloud could only be
-# reached by an absolute path into World. An outTOP resolves `selecttop` across
-# network boundaries, so this needs no select TOPs of its own.
-for name, source, order, y in (
-		('out_points', 'World/mergedPointClouds', 0, 0),
-		('out_colors', 'World/mergedColors', 1, -120)):
-	out = comp.op(name) or comp.create(outTOP, name)
-	out.pars('selecttop')[0].val = source
-	out.par.connectorder = order
-	out.nodeX, out.nodeY = 1225, y
-note('added out_points and out_colors')
+# The two layout TOPs tiled every device's cloud and colour into big textures.
+# A merge POP gathers the real points instead, through a list of POP parameters
+# rather than wires, which is how a changing number of devices reaches one
+# output. extUtilities.WireMerge fills the list in.
+for dead in ('layout1', 'layout2', 'mergedPointClouds', 'mergedColors'):
+	if world.op(dead):
+		world.op(dead).destroy()
+		stripped.append('World/{}'.format(dead))
+
+merge = world.op('mergePOP') or world.create(mergePOP, 'mergePOP')
+# Sits where the layout did, so World still reads left to right.
+merge.nodeX, merge.nodeY = 175, -25
+
+# A select POP rather than a null, because it can pick attributes: valid and
+# maskv are only used to decide what to keep, so they stop here. The merged
+# cloud carries P and Color.
+merged = world.op('merged') or world.create(selectPOP, 'merged')
+merged.par.pop = 'mergePOP'
+merged.par.pointattrscope = 'P Color'
+merged.nodeX, merged.nodeY = 350, -25
+
+# geo_pc renders the merged cloud itself, pulled in by a select POP with its
+# render and display flags on. The material is still World/pointsprite1.
+geo = world.op('geo_pc')
+geo.par.instanceop = ''
+geo.par.instancing = False
+for child in list(geo.children):
+	child.destroy()
+pc = geo.create(selectPOP, 'pc')
+pc.par.pop = '../merged'
+pc.render = True
+pc.display = True
+note('World merges {} -> merged (P Color) -> geo_pc/pc'.format(merge.name))
+
+# Give the component a real output connector. An out POP can point at a POP in
+# another network, so it needs no select of its own.
+for dead in ('out_points', 'out_colors'):
+	if comp.op(dead):
+		comp.op(dead).destroy()
+		stripped.append(dead + ' (outTOP, superseded by out_pop)')
+out = comp.op('out_pop') or comp.create(outPOP, 'out_pop')
+out.par.selectpop = 'World/merged'
+out.par.connectorder = 0
+out.nodeX, out.nodeY = 1225, 0
+note('stripped: {}'.format(', '.join(stripped) or 'nothing'))
+note('added out_pop')
+
+# Point the merge at whatever devices exist right now. Every later Gather devices
+# pulse does this again, from the same method.
+utils.WireMerge()
+note('merge wired to {} device(s)'.format(merge.seq.input.numBlocks))
 
 
 # ____________________________________________________ 9. annotations
 
-# Comments are free: every operator carries one, readable in the network editor
-# and in the OP dialog. Boxes are not. TD 2025 has no lightweight networkBox any
-# more, and one annotateCOMP is 24 internal operators and ~1.9 KB of .tox, so
-# there are three of them, over the three regions the network is navigated by,
-# rather than one per cluster. Measured 2026-09-01: 132 ops / 27.0 KB bare,
-# 204 ops / 36.2 KB with the three boxes and the comments below.
+# Each box costs 24 operators and about 1.9 KB in the .tox, so there are three
+# of them, one per region of the network, rather than one per cluster.
 
-COMMENTS = {
-	'extTDXDepthCamMerger': 'Root extension: Calibrate, Refine, RebuildChain, '
-		'ResetCalibration, CheckWorker. Imports numpy, never open3d.',
-	'extUtilities': 'Device discovery, per device source TOPs, clone management.',
-	'workerSource': 'worker.py. Written to temp and run by the Setup python as a '
-		'subprocess. Importing open3d inside TouchDesigner crashes the process, '
-		'which is why all the Open3D work happens out there.',
-	'deviceTypes': 'Camera registry. One row per supported camera: what operator '
-		'to make, which image to select, what parameter holds the serial. A new '
-		'camera is a new row.',
-	'calibrationData': 'Source of truth. One row per device: its parent and its '
-		'RAW pairwise matrix, plus the quality of that fit.',
-	'customSources': 'Device type "custom" only: explicit TOP paths, one row per '
-		'device.',
-	'parexec1': 'Routes every root parameter. Pulses go to the extensions, the '
-		'three About links go to the system browser.',
-	'Device1': 'Clone master. Device2..N are clones made by the Gather devices '
-		'pulse. transformMatrix is cloneImmune, so each device keeps its own.',
-	'World': 'The merged cloud and one DeviceCam frustum per device. replicator1 '
-		'counts by Numberofdevices.',
-	'cam1': 'ArcBall viewport navigation.',
-	'UI': 'Viewport panel plus the parameter COMP.',
-	'render1': 'Viewport render.',
-	'bg': 'Viewport image. UI/Viz reads it through its Background TOP parameter.',
-	'out_points': 'Component output: merged point positions, straight out of World.',
-	'out_colors': 'Component output: merged colours, straight out of World.',
-}
-for name, text in COMMENTS.items():
-	if comp.op(name):
-		comp.op(name).comment = text
-
-DEVICE_COMMENTS = {
-	'in_pointcloud': 'Built from the deviceTypes row, not hardcoded.',
-	'in_color': 'Built from the deviceTypes row, not hardcoded.',
-	'in_mask': 'Built only when the camera has a mask source. Orbbec has none.',
-	'thresh1': 'Mask branch: player index to a 0/1 matte.',
-	'switch1': 'Raw cloud or masked cloud, per Usemaskforcalibration.',
-	'null_sourcePointcloud': 'What Calibrate samples and dumps to .npy.',
-	'glsl2': 'Applies the composed matrix on the GPU. w is forced to 1.0.',
-	'transformMatrix': 'This device COMPOSED into the reference frame. The only '
-		'table the shader and the frustum read.',
-	'null_pointCloud': 'What the renderer reads.',
-}
-for name, text in DEVICE_COMMENTS.items():
-	if device.op(name):
-		device.op(name).comment = text
-note('commented {} operators'.format(len(COMMENTS) + len(DEVICE_COMMENTS)))
+# Comments on single operators clutter the network view, so there are none. The
+# explanations live in STRUCTURE.md and in the three boxes below. Clear any left
+# by an earlier build, or a stale one would survive forever.
+cleared = 0
+for child in comp.findChildren(includeUtility=True):
+	if child.comment:
+		child.comment = ''
+		cleared += 1
+if comp.comment:
+	comp.comment = ''
+	cleared += 1
+note('cleared {} leftover operator comments'.format(cleared))
 
 # Boxes are sized from the operators they hold, so moving a node cannot leave a
 # box behind. Padding leaves room for the title bar at the top.
@@ -545,12 +511,11 @@ BOXES = (
 		'src/ by tools/td_build.py; editing them in here is reverted by the next '
 		'build. The three tables are its state.'),
 	('Devices', ('Device1',),
-		'One COMP per camera, cloned from Device1: source TOPs, an optional mask '
-		'branch, and the GPU transform.'),
-	('Render and outputs', ('World', 'cam1', 'UI', 'render1', 'bg', 'out_points',
-		'out_colors'),
-		'The merged cloud, the viewport that shows it, and the two outTOPs that '
-		'hand it downstream. No Python runs per frame in here.'),
+		'One COMP per camera, cloned from Device1. Three source TOPs, because '
+		'that is what the camera SDKs give; everything past them is a POP.'),
+	('Render and outputs', ('World', 'cam1', 'UI', 'render1', 'bg', 'out_pop'),
+		'The merged point cloud, the viewport that shows it, and the outPOP that '
+		'hands it downstream. No Python runs per frame in here.'),
 )
 
 for old in comp.findChildren(type=annotateCOMP, maxDepth=1):
@@ -558,8 +523,8 @@ for old in comp.findChildren(type=annotateCOMP, maxDepth=1):
 
 for title, members, body in BOXES:
 	ops = [comp.op(m) for m in members if comp.op(m)]
-	# 20 sideways keeps the Devices box clear of the Render box, which sits 65
-	# units to its right; 85 above leaves room for the title bar.
+	# 20 sideways keeps neighbouring boxes apart; 85 above leaves room for the
+	# title bar.
 	left = min(o.nodeX for o in ops) - 20
 	right = max(o.nodeX + o.nodeWidth for o in ops) + 20
 	bottom = min(o.nodeY for o in ops) - 30
@@ -577,6 +542,10 @@ note('annotated {} regions'.format(len(BOXES)))
 
 
 comp.cook(force=True)
+# A POP says "No input POP" until whatever feeds it has cooked, so walk the
+# chain once before looking for errors. Cooking the container does not reach it.
+for o in comp.findChildren(type=POP, maxDepth=99):
+	o.cook(force=True)
 errs = [(o.path.split(NAME + '/')[-1], o.errors().replace('\n', ' ')[:100])
 	for o in comp.findChildren(maxDepth=99) if o.errors()]
 note('errors after build: {}'.format(len(errs)))
@@ -586,10 +555,10 @@ for p, e in errs:
 
 # ____________________________________________________ 10. export the artefact
 
-# The shipped .tox must not carry this machine's interpreter path: a user opening
-# it would find a python.exe that does not exist on their disk, and the README
-# already walks them through setting their own. The master keeps PYEXE, because
-# tools/td_test_devicesources.py drives a real registration through it.
+# The shipped .tox must not carry this machine's python path: a user would open
+# it and find a python.exe that is not on their disk, and the README walks them
+# through setting their own. The working file keeps it, because the in-TD test
+# runs a real registration through it.
 keep = comp.par.Pythonexe.eval()
 comp.par.Pythonexe = ''
 comp.save(REPO + '/' + NAME + '.tox')
