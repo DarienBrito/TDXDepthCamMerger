@@ -1,7 +1,7 @@
 name: tests
 
 # What CI can and cannot cover here: the three suites below need no
-# TouchDesigner. The 78 in-TD checks (tools/td_test_devicesources.py and the
+# TouchDesigner. The 203 + 2 in-TD checks (tools/td_test_devicesources.py and the
 # calibration harness) need TD, a licence and a GPU, so they stay manual.
 
 on:
