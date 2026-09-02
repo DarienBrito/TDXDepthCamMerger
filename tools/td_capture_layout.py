@@ -10,9 +10,16 @@ where anything was put. The arrangement and the annotate boxes are hand made, so
 they live in a data file that the build applies at the end. Run this after any
 hand rearrange, or the next build hands the old positions back.
 
-Captured: every top level node, Device1's children, and the annotate boxes in
-full. NOT captured: Device2 and up, whose positions extUtilities computes from
-the template when a device is gathered.
+Captured, in two parts:
+
+  nodes / annotates  inside the component: every top level node, Device1's
+                     children, and the five annotate boxes in full
+  project            outside it: the component's own place in /ProjectName,
+                     Inputs_1 and Inputs_2 and everything in them, annotateDemo
+
+NOT captured: Device2 and up, whose positions extUtilities computes from the
+template when a device is gathered, and TDMCP, which exists on this machine
+only and which nothing rebuilds.
 """
 
 import json
@@ -69,13 +76,29 @@ for box in comp.findChildren(type=annotateCOMP, maxDepth=1):
 	})
 annotates.sort(key=lambda a: a['name'])
 
+# Outside the component. td_build_example.py destroys and rebuilds Inputs_1 and
+# Inputs_2 every run, and td_build.py rebuilds the component itself, so without
+# this any hand arrangement out here is lost the next time either one is run.
+# TDMCP is skipped on purpose: it is this machine's MCP rig, it is not in the
+# demo, and nothing rebuilds it, so recording where it sits would only put a
+# local detail into a tracked file.
+host = comp.parent()
+project = {}
+for child in host.findChildren(depth=1):
+	if child.name == 'TDMCP':
+		continue
+	project[child.name] = [int(child.nodeX), int(child.nodeY)]
+	if child.name.startswith('Inputs_'):
+		for inner in child.findChildren(depth=1):
+			project[child.name + '/' + inner.name] = [int(inner.nodeX), int(inner.nodeY)]
+
 with open(OUT, 'w', encoding='utf-8', newline='\n') as handle:
-	json.dump({'nodes': nodes, 'annotates': annotates}, handle,
+	json.dump({'nodes': nodes, 'annotates': annotates, 'project': project}, handle,
 		indent='\t', sort_keys=True, ensure_ascii=False)
 	handle.write('\n')
 
-print('captured {} nodes and {} annotate boxes to {}'.format(
-	len(nodes), len(annotates), OUT))
+print('captured {} nodes, {} annotate boxes and {} project nodes to {}'.format(
+	len(nodes), len(annotates), len(project), OUT))
 for box in annotates:
 	print('    {:<16} {:<20} {}x{} at ({}, {}), body {} chars'.format(
 		box['name'], repr(box['title']), box['w'], box['h'], box['x'], box['y'],
