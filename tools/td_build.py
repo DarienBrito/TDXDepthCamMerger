@@ -198,7 +198,11 @@ for pagename, entries in PAGES:
 		if 'val' in opt:
 			vals = opt['val'] if opt.get('size') else (opt['val'],)
 			for par, val in zip(group, vals):
-				par.val = val
+				# default as well as val: TD's own "reset to default" on the
+				# parameter reads default, and an unset one is 0 or ''. Without
+				# this a right click on Voxel size hands the user 0.05 -> 0.0,
+				# which no longer registers anything, and blanks Version.
+				par.val = par.default = val
 		if opt.get('readOnly'):
 			for par in group:
 				par.readOnly = True
@@ -566,10 +570,14 @@ for p, e in errs:
 # it and find a python.exe that is not on their disk, and the README walks them
 # through setting their own. The working file keeps it, because the in-TD test
 # runs a real registration through it.
-keep = comp.par.Pythonexe.eval()
+# The DEFAULT carries the path too, now that section 4 sets it, and a default
+# ships inside the .tox just as a value does. Blank both.
+keep, keepDefault = comp.par.Pythonexe.eval(), comp.par.Pythonexe.default
 comp.par.Pythonexe = ''
+comp.par.Pythonexe.default = ''
 comp.save(REPO + '/' + NAME + '.tox')
 comp.par.Pythonexe = keep
+comp.par.Pythonexe.default = keepDefault
 note('exported {}/{}.tox, Pythonexe cleared in the artefact only'.format(REPO, NAME))
 
 print('\n'.join(report))

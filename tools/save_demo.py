@@ -39,6 +39,10 @@ if comp is None:
 # _______________________________________________ 1. drop what is local to here
 
 comp.par.Pythonexe = ''
+# The default ships too, and since td_build.py started setting defaults it holds
+# this machine's conda path. Nothing restores it here because the master is
+# reloaded from disk at the end.
+comp.par.Pythonexe.default = ''
 for name in ('Open3dstatus', 'Open3dversion', 'Pythonversion',
 		'Laststatus', 'Lastfitness', 'Lastrmse'):
 	comp.par[name] = ''
