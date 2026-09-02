@@ -6,8 +6,10 @@ Backup/TDXDepthCam*.toe
 Backup/*.tar.gz
 DemoTDXDepthCamMerger.[0-9]*.toe
 
-# build-time log from tools/td_build_demo.py
-Log/*.log
+# Nothing under Log/ is ours to track: tools/save_demo.py writes demo_save.log
+# there, and TD's Orbbec SDK drops OrbbecSDK.log.txt beside it the moment an
+# orbbecTOP exists, which .log alone does not match.
+Log/
 
 __pycache__/
 *.pyc
