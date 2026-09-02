@@ -47,6 +47,26 @@ def note(msg):
 	report.append(msg)
 
 
+# The hand made arrangement, written by tools/td_capture_layout.py. Loaded here
+# rather than where it is used, because section 1 needs the component's own
+# place in the project and section 9 needs the boxes. Missing is reported and
+# skipped, never recomputed: a build that quietly rearranges the network is the
+# bug this file exists to stop.
+LAYOUT = BUILD + '/layout.json'
+layout = {}
+if os.path.isfile(LAYOUT):
+	with open(LAYOUT, encoding='utf-8') as handle:
+		layout = json.load(handle)
+else:
+	note('NO {} -- nodes stay where they are created and there are no annotate '
+		'boxes. Run tools/td_capture_layout.py on a good master.'.format(LAYOUT))
+
+
+def placed(path, x, y):
+	"""Captured position, falling back to the literal for a fresh repo."""
+	return layout.get('project', {}).get(path, (x, y))
+
+
 # ____________________________________________________ 1. fresh container
 
 for leftover in ('probe', 'exttest', 'mtx_test', NAME, '_stage'):
@@ -60,7 +80,7 @@ old = stage.op('DBLib_TDAzureMerger')
 note('loaded source tox: {} descendants'.format(len(old.findChildren(maxDepth=99))))
 
 comp = HOST.create(containerCOMP, NAME)
-comp.nodeX, comp.nodeY = 0, 400
+comp.nodeX, comp.nodeY = placed(NAME, 0, 400)
 comp.par.parentshortcut = SHORTCUT
 comp.par.w, comp.par.h = 1920, 1080
 comp.par.hmode, comp.par.vmode = 'fill', 'fill'
@@ -523,21 +543,10 @@ note('cleared {} leftover operator comments'.format(cleared))
 # Sizing boxes from the operators they hold was tried and thrown away: it cannot
 # express a box that deliberately sits beside the network, and every build undid
 # the hand work. Nothing is derived here any more, it is applied.
-LAYOUT = BUILD + '/layout.json'
-layout = None
-if os.path.isfile(LAYOUT):
-	with open(LAYOUT, encoding='utf-8') as handle:
-		layout = json.load(handle)
-else:
-	# No silent fallback to a computed layout: a build that quietly rearranges
-	# the network is the bug this file exists to fix. Say so and leave it alone.
-	note('NO {} -- nodes stay where they were created and there are no annotate '
-		'boxes. Run tools/td_capture_layout.py on a good master.'.format(LAYOUT))
-
 for old in comp.findChildren(type=annotateCOMP, maxDepth=1):
 	old.destroy()
 
-for box in (layout or {}).get('annotates', ()):
+for box in layout.get('annotates', ()):
 	a = comp.create(annotateCOMP, box['name'])
 	# create() does not honour the name for an annotate, it numbers them itself,
 	# so annotateHowto came back as annotate5. Rename after the fact.
@@ -554,7 +563,7 @@ for box in (layout or {}).get('annotates', ()):
 	# A box re-fits itself to its body, so the size goes on after the text.
 	a.nodeWidth, a.nodeHeight = box['w'], box['h']
 note('annotated {} regions from layout.json'.format(
-	len((layout or {}).get('annotates', ()))))
+	len(layout.get('annotates', ()))))
 
 
 # ____________________________________________________ 9b. positions
@@ -562,7 +571,7 @@ note('annotated {} regions from layout.json'.format(
 # Last, so it overrides the positions the sections above set as they created
 # things. Those stay as a sane fallback for anything layout.json does not name.
 placed, missing = 0, []
-for path, (x, y) in sorted((layout or {}).get('nodes', {}).items()):
+for path, (x, y) in sorted(layout.get('nodes', {}).items()):
 	node = comp.op(path)
 	if node is None:
 		missing.append(path)

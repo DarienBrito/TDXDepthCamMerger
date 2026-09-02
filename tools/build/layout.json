@@ -191,5 +191,111 @@
 			-900,
 			-40
 		]
+	},
+	"project": {
+		"Inputs_1": [
+			-300,
+			-50
+		],
+		"Inputs_1/cam1_color": [
+			-75,
+			250
+		],
+		"Inputs_1/cam1_points": [
+			-75,
+			500
+		],
+		"Inputs_1/cam1_points_callbacks": [
+			-75,
+			380
+		],
+		"Inputs_1/cam2_color": [
+			-75,
+			-175
+		],
+		"Inputs_1/cam2_points": [
+			-75,
+			75
+		],
+		"Inputs_1/cam2_points_callbacks": [
+			-75,
+			-50
+		],
+		"Inputs_1/cam3_color": [
+			-75,
+			-600
+		],
+		"Inputs_1/cam3_points": [
+			-75,
+			-350
+		],
+		"Inputs_1/cam3_points_callbacks": [
+			-75,
+			-475
+		],
+		"Inputs_1/cloud_callbacks": [
+			-375,
+			-125
+		],
+		"Inputs_1/syntheticScene": [
+			-375,
+			15
+		],
+		"Inputs_2": [
+			-300,
+			-250
+		],
+		"Inputs_2/cam1_color": [
+			-75,
+			175
+		],
+		"Inputs_2/cam1_points": [
+			-75,
+			400
+		],
+		"Inputs_2/cam1_points_callbacks": [
+			-75,
+			280
+		],
+		"Inputs_2/cam2_color": [
+			-75,
+			-225
+		],
+		"Inputs_2/cam2_points": [
+			-75,
+			25
+		],
+		"Inputs_2/cam2_points_callbacks": [
+			-75,
+			-100
+		],
+		"Inputs_2/cam3_color": [
+			-75,
+			-625
+		],
+		"Inputs_2/cam3_points": [
+			-75,
+			-375
+		],
+		"Inputs_2/cam3_points_callbacks": [
+			-75,
+			-500
+		],
+		"Inputs_2/cloud_callbacks": [
+			-375,
+			-125
+		],
+		"Inputs_2/syntheticScene": [
+			-375,
+			15
+		],
+		"TDXDepthCamMerger": [
+			0,
+			-50
+		],
+		"annotateDemo": [
+			-875,
+			-325
+		]
 	}
 }

@@ -52,7 +52,8 @@ the same, the parameter names are not.
 Open `DemoTDXDepthCamMerger.toe`. It generates three synthetic depth cameras looking at one scene
 from different places, coloured red, green and blue, and starts misaligned. Set the Python exe as
 below, pulse Gather devices, then calibrate pair 1 and 2 followed by pair 2 and 3, and watch the
-clouds come together. The START_HERE DAT in the project has the same steps.
+clouds come together. The note beside the component in the project says the same, and the
+component's own How to use box carries the steps.
 
 ## Installation
 

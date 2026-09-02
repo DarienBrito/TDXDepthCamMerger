@@ -2,10 +2,10 @@
 Save DemoTDXDepthCamMerger.toe from the OPEN master, then bring the master back.
 
 The demo IS the master minus TDMCP: the same component, the same Inputs_1 /
-Inputs_2 synthetic cameras, the same layout. Only what is true of this machine
-is cleared first (the Python exe, the worker probe, the last calibration
-readouts), and START_HERE is replaced with instructions for whoever opens the
-file.
+Inputs_2 synthetic cameras, the same nodes in the same places. Only what is true
+of this machine is cleared first: the Python exe, the worker probe and the last
+calibration readouts. Nothing is added or moved. What a visitor reads is the
+annotateDemo box beside the component, which is part of the master.
 
 Run from TD, with the master open and the rig built:
 
@@ -48,42 +48,9 @@ for name in ('Open3dstatus', 'Open3dversion', 'Pythonversion',
 	comp.par[name] = ''
 comp.par.Lastcorrespondences = 0
 
-# _______________________________________________ 2. instructions for a visitor
+print('cleaned: Python exe, worker probe, last readouts')
 
-readme = HOST.op('START_HERE') or HOST.create(textDAT, 'START_HERE')
-readme.par.language = 'python'
-readme.text = '''"""
-TDXDepthCamMerger demo. Three synthetic depth cameras, no hardware needed.
-
-Inputs_1 generates three overlapping point clouds of one scene, each in its own
-camera frame, coloured red, green and blue. They start misaligned. Calibrating
-brings them into one coordinate space. Inputs_2 is a second scene from
-different poses: point the component's Inputs op at it and pulse Gather devices
-to try another rig.
-
-To run it:
-
-  1. Select TDXDepthCamMerger. On the Setup page set Python exe to a python.exe
-     that has open3d installed, then pulse Check worker. Worker status should
-     report the versions. See the README for the install.
-
-  2. Pulse Gather devices. Three devices appear, one per customSources row.
-
-  3. Calibrate page: set Specify pair to 1 and 2, then pulse Calibrate. Watch
-     the green cloud swing onto the red one.
-
-  4. Set Specify pair to 2 and 3 and pulse Calibrate again. Blue joins them,
-     composed through camera 2 into camera 1's frame.
-
-The answers to look for are in Inputs_1/syntheticScene: camera 2 sits 25
-degrees round and 40 cm to the side of camera 1, camera 3 is 18 degrees the
-other way. Last fitness and Last RMSE report how well it did.
-"""
-'''
-
-print('cleaned: Python exe, worker probe, last readouts, START_HERE')
-
-# _______________________________________________ 3. the save, three frames on
+# _______________________________________________ 2. the save, three frames on
 #
 # chr(10) instead of a newline escape: this code is a string inside a string,
 # and a real newline here would break the generated call apart.
