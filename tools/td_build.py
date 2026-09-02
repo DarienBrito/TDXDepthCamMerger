@@ -1,5 +1,5 @@
 """
-Build TDXDepthCamMerger 0.3.0 inside a running TouchDesigner 2025.33070.
+Build TDXDepthCamMerger 0.4.0 inside a running TouchDesigner 2025.33070.
 
 Run from TD (MCP execute_code):
 
@@ -36,7 +36,7 @@ SHORTCUT = 'TDXMerger'
 OLD_SHORTCUT = 'TDAzureMerger'
 PYEXE = os.environ.get('TDX_PYTHON_EXE') or 'D:/anaconda3/envs/td/python.exe'
 
-VERSION = '0.3.0'
+VERSION = '0.4.0'
 AUTHOR = 'Darien Brito'
 
 report = []

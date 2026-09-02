@@ -4,7 +4,7 @@ A TouchDesigner component that merges point clouds from several depth cameras in
 space. It estimates the rigid transform between cameras with [Open3D](http://www.open3d.org/),
 using FPFH features plus RANSAC for the global alignment and ICP for the refinement.
 
-Version 0.3.0. Built and tested on TouchDesigner **2025.33070**.
+Version 0.4.0. Built and tested on TouchDesigner **2025.33070**.
 
 Supported sources:
 
@@ -19,7 +19,9 @@ component they become points: the merged cloud you get back is a POP.
 
 ## If you are coming from 0.0.3, read this first
 
-0.3.0 is a breaking change, and the most important part is the install.
+0.4.0 is a breaking change, and the most important part is the install. It follows 0.0.3
+directly: 0.2.0 and 0.3.0 were development versions and were never released, and the version
+jumped to 0.4.0 so it cannot be misread as 0.0.3.
 
 **Do not put Open3D inside TouchDesigner.** The old README told you to copy it into
 `TouchDesigner/bin/Lib/site-packages`, or to pip install it into TD's Python. On current builds
@@ -34,7 +36,7 @@ no longer cares which Python TouchDesigner ships.
 
 Parameters that changed:
 
-| 0.0.3 | 0.3.0 |
+| 0.0.3 | 0.4.0 |
 |---|---|
 | `Gather kinects` | `Gather devices` |
 | `Use player for calibration` | `Use mask for calibration` |
