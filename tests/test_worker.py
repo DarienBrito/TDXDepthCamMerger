@@ -93,9 +93,9 @@ tgtPad = np.vstack([tgt, np.zeros((20000, 3))])
 srcPad = np.vstack([src, np.zeros((20000, 3))])
 np.save(os.path.join(tmp, 'tgt.npy'), tgtPad)
 np.save(os.path.join(tmp, 'src.npy'), srcPad)
-# Too few points to clear CORRESPONDENCES_FAIL, so the global stage grades
-# FAIL. Translating a cloud does not work here: global registration is
-# initialisation free, so it just finds the right answer anyway.
+# Too few points to pass, so the rough match grades FAIL. Moving a cloud far
+# away does not work here: the rough match needs no starting guess, so it finds
+# the right answer anyway.
 np.save(os.path.join(tmp, 'far.npy'),
         np.random.default_rng(11).uniform(-1.5, 1.5, (60, 3)))
 np.save(os.path.join(tmp, 'tgtcol.npy'), np.tile([.5, .5, .5], (len(tgtPad), 1)))
@@ -172,6 +172,39 @@ check('failed global comes back as global, unrefined',
       (not res8.get('ok')) or (res8.get('stage') == 'global'),
       '{} / {}'.format(res8.get('stage'), str(res8.get('error'))[:60]))
 
+print('\nconsensus: repeated global runs, and whether they agreed')
+res9, _ = call(job('cons', {'mode': 'global', 'seed': -1}))
+check('an unseeded global run reports consensus', 'consensus' in res9,
+      json.dumps({k: v for k, v in res9.items() if k != 'matrix'})[:200])
+check('and says whether the runs agreed', isinstance(res9.get('agreed'), bool),
+      str(res9.get('agreed')))
+if res9.get('ok'):
+    print('       spread {:.4f} m, limit {:.4f}, agreed {}'.format(
+        res9['consensus'], res9['consensusLimit'], res9['agreed']))
+    check('a well overlapped pair agrees with itself', res9['agreed'] is True,
+          '{:.4f} m apart'.format(res9['consensus']))
+
+# A seeded run comes out the same every time, so asking four of them whether
+# they agree proves nothing. The worker must not claim it checked.
+res10, _ = call(job('consseed', {'mode': 'global', 'seed': 5}))
+check('a seeded run reports no consensus', 'consensus' not in res10,
+      str(res10.get('consensus')))
+res11, _ = call(job('consoff', {'mode': 'global', 'seed': -1, 'consensusRuns': 1}))
+check('consensusRuns 1 disables the check', 'consensus' not in res11,
+      str(res11.get('consensus')))
+
+# globalThenIcp has to carry the disagreement up: the refine polishes whatever
+# it is handed, so its own score cannot say the rough match started wrong.
+# The seed is cleared here, because a seeded run has no consensus to carry.
+res12, _ = call(job('consgi', {'mode': 'globalThenIcp', 'seed': -1}))
+if res12.get('ok'):
+    check('globalThenIcp carries consensus up from the global stage',
+          'consensus' in res12 and 'consensus' in res12.get('global', {}),
+          json.dumps({k: v for k, v in res12.items() if k != 'matrix'})[:200])
+    check('and the top level agrees with its global stage',
+          res12.get('agreed') == res12['global'].get('agreed'),
+          '{} vs {}'.format(res12.get('agreed'), res12['global'].get('agreed')))
+
 print('\nfailure paths report cleanly instead of hanging')
 res4, proc4 = call(job('bad', {'mode': 'global', 'target': os.path.join(tmp, 'nope.npy')}))
 check('missing file -> ok:false', res4.get('ok') is False, str(res4.get('error'))[:90])
@@ -185,9 +218,8 @@ check('error names the cause', 'no valid points' in str(res5.get('error')), str(
 res6, _ = call(job('nocol', {'mode': 'icp', 'colored': True, 'init': list(coarse.reshape(-1))}))
 check('coloured ICP without colours -> ok:false', res6.get('ok') is False, str(res6.get('error'))[:90])
 
-# An Orbbec's colour TOP is not aligned to its depth, and a custom source can
-# point at any TOP, so the colour image can carry a different number of pixels
-# than the cloud. That used to surface as numpy's "boolean index did not match".
+# A custom source can point at any TOP, so the colour image can hold a
+# different number of pixels than the cloud. The worker has to say so plainly.
 np.save(os.path.join(tmp, 'bigcol.npy'), np.tile([.5, .5, .5], (len(tgtPad) * 2, 1)))
 res8, _ = call(job('miscol', {'mode': 'icp', 'colored': True,
                               'init': list(coarse.reshape(-1)),
