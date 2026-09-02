@@ -201,6 +201,10 @@ Other buttons: **Refine** runs ICP again on an existing calibration and never st
 search. **Reset calibration** puts every device back to identity. **Rebuild chain** recomposes the
 transforms without re-registering, which is what you want after changing **Reference device**.
 
+**Refine only reaches a few centimetres.** At the default **Refine voxel** of 0.01 it pulls a
+camera back about 0.08 m and no further. If one has been knocked further than that, pulse
+**Calibrate** instead. Refine will not rescue it, and it will not tell you it failed to.
+
 ### Reading the result
 
 You get **Last status**, **Last fitness**, **Last RMSE**, **Last correspondences** and
@@ -219,6 +223,17 @@ If it is low, move the cameras so they share more of the scene. No parameter fix
 - `OK`: it converged and the numbers look sane.
 - `WARN`: marginal. Look at the cloud before trusting it.
 - `FAIL`: the result is noise.
+
+**A `WARN` usually means the four runs disagreed.** Every **Calibrate** runs the rough search four
+times over and compares the answers. That search is random, so it only disagrees with itself when
+the scene is ambiguous. When that happens you get `WARN` even if the fitness looks good.
+
+Treat it as an early warning rather than a complaint about the answer in front of you. It is saying
+this pair is unstable, so the next press of **Calibrate** may well land somewhere wrong. More
+overlap, or something less symmetric in view, is the fix.
+
+Setting **RANSAC seed** to 0 or more switches this check off. A seeded run comes out identical
+every time, so four of them always agree and the agreement tells you nothing.
 
 An `OK` can still be wrong. Two clouds that both contain a floor can be lined up wrongly and still
 score well. **Always look at the merged cloud in the viewport.** That is what confirms a
