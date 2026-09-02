@@ -19,6 +19,7 @@ PAIRS = (
 	('extTDXDepthCamMerger', 'extTDXDepthCamMerger.py'),
 	('extUtilities', 'extUtilities.py'),
 	('workerSource', 'worker.py'),
+	('parexec1', 'parexec1.py'),
 	('Device1/extDevice', 'extDevice.py'),
 )
 
